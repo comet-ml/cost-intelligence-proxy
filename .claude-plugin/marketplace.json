@@ -1,0 +1,30 @@
+{
+  "name": "cost-intelligence",
+  "owner": {
+    "name": "Comet ML",
+    "url": "https://comet.com"
+  },
+  "plugins": [
+    {
+      "name": "opik",
+      "source": "./",
+      "description": "Cost intelligence proxy for Claude Code — captures every Anthropic API call, attributes tokens to cost buckets (system prompt, tools, MCP, memory, skills, agents, user, tool I/O), and ships per-call spans to Opik.",
+      "author": {
+        "name": "Comet ML",
+        "url": "https://comet.com"
+      },
+      "homepage": "https://github.com/comet-ml/cost-intelligence-proxy",
+      "repository": "https://github.com/comet-ml/cost-intelligence-proxy",
+      "license": "Apache-2.0",
+      "keywords": [
+        "opik",
+        "observability",
+        "tracing",
+        "cost",
+        "tokens",
+        "claude-code"
+      ],
+      "category": "observability"
+    }
+  ]
+}

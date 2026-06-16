@@ -1,0 +1,6 @@
+{
+  "hooks": {
+    "SessionStart": [{"hooks": [{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cipx-hook-launcher"}]}],
+    "PreToolUse":  [{"hooks": [{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cipx-hook-launcher"}]}]
+  }
+}

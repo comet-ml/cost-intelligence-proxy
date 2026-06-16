@@ -56,7 +56,43 @@ intercepted. CONNECTs to anything else are spliced raw, undecryptable.
 
 ## Install
 
-### macOS / Linux (curl)
+### Claude Code plugin (recommended)
+
+From within Claude Code:
+
+```
+/plugin marketplace add comet-ml/cost-intelligence-proxy
+/plugin install opik@cost-intelligence
+```
+
+Then drop the binaries and finish setup with the plugin's own command:
+
+```
+/opik:install
+```
+
+The plugin installs the `SessionStart` hook that keeps the cipx gateway
+alive between Claude Code sessions, plus the `/opik:tracing`,
+`/opik:status`, and `/opik:viewer` slash commands. `/opik:install` is the
+one that downloads the actual binaries from this repo's releases and runs
+`cipx setup`.
+
+Restart Claude Code after running `/opik:install` so the hook fires from a
+fresh process.
+
+### Local plugin install (contributors)
+
+If you've cloned this repo locally and want to install your working copy
+instead of the published version:
+
+```
+/plugin marketplace add /path/to/cost-intelligence-proxy
+/plugin install opik@cost-intelligence
+```
+
+### macOS / Linux (curl, no plugin)
+
+If you'd rather skip the plugin and just run `cipx` from your shell:
 
 > The repo is still private, so `install.sh` needs a `GH_TOKEN` with read
 > access to release assets. Once we go public this drops away.
@@ -115,6 +151,15 @@ Clients pick it up at next startup or within the hourly poll.
 
 ```json
 {
+  "extraKnownMarketplaces": {
+    "cost-intelligence": {
+      "source": {"source": "github", "repo": "comet-ml/cost-intelligence-proxy"},
+      "autoUpdate": true
+    }
+  },
+  "enabledPlugins": {
+    "opik@cost-intelligence": true
+  },
   "env": {
     "OPIK_CC_TRACING_ENABLED": "true",
     "OPIK_BASE_URL": "https://www.comet.com/opik/api",
@@ -128,6 +173,9 @@ Clients pick it up at next startup or within the hourly poll.
 
 What each piece does:
 
+- `extraKnownMarketplaces` + `enabledPlugins` — registers this repo as a
+  marketplace and force-enables the plugin for every user. Users see it as
+  **managed** and can't disable it.
 - `OPIK_CC_TRACING_ENABLED=true` — turns tracing on for every session without
   users dropping per-project files. Individual projects can still opt out by
   writing `off` to `.claude/.opik-tracing-enabled`.
@@ -143,8 +191,10 @@ What each piece does:
   launch until fresh managed settings are fetched, so the brief unenforced
   window on first launch can't leak unmonitored sessions.
 
-The binaries themselves need to land on each machine separately (`install.sh`
-in a provisioning script, an MDM payload, or a Homebrew tap — see the
+The binaries themselves still need to land on each machine separately —
+enabling the plugin via managed settings gives every user the slash commands
+and the hook wiring, but the actual `cipx` binary is downloaded by
+`/opik:install` (or `install.sh` in a provisioning script — see the
 [#provisioning](#provisioning) section).
 
 **Available `{field}` tokens:**
@@ -307,6 +357,17 @@ not body text).
 Every span shipped under redaction carries `cc.privacy = {capture_content:
 false, applied_at: <ts>}` so consumers can filter
 `WHERE cc.privacy.capture_content = false`.
+
+## Slash commands (plugin)
+
+After `/plugin install opik@cost-intelligence`:
+
+| Command | Purpose |
+|---|---|
+| `/opik:install` | Download the cipx binaries for your OS/arch and run `cipx setup`. Idempotent — also used to upgrade. |
+| `/opik:tracing on \| off \| debug \| status` | Toggle the project's tracing marker (or the global one with `--global`). `status` prints the effective state and how it resolved. |
+| `/opik:status` | Show proxy pid, port, queue depth, last shipped span, last Opik error, telemetry on/off. |
+| `/opik:viewer` | Launch the local debug viewer in the background and print its URL. |
 
 ## Debugging
 

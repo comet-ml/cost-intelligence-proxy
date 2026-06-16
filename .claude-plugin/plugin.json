@@ -1,0 +1,23 @@
+{
+  "name": "opik",
+  "version": "0.0.2",
+  "description": "Cost intelligence proxy for Claude Code. Installs hooks that keep the cipx gateway alive between sessions; the gateway captures every Anthropic API call and ships cost-attributed spans to Opik.",
+  "author": {
+    "name": "Comet ML",
+    "url": "https://comet.com"
+  },
+  "repository": "https://github.com/comet-ml/cost-intelligence-proxy",
+  "homepage": "https://github.com/comet-ml/cost-intelligence-proxy",
+  "license": "Apache-2.0",
+  "keywords": [
+    "opik",
+    "observability",
+    "tracing",
+    "cost",
+    "tokens",
+    "claude-code"
+  ],
+  "skills": [
+    "./commands/"
+  ]
+}
