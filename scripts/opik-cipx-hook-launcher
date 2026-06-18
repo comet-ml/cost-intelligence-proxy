@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Locate opik-cipx and exec its hook subcommand. The plugin doesn't ship
+# the binary itself — users run /opik:install once (or curl install.sh)
+# to drop opik-cipx into ~/.opik-cipx/bin/. This launcher tolerates a
+# missing binary without blocking the Claude Code session (spec §4.1
+# step 3: hook must never fail CC).
+#
+# Invoked as:
+#   opik-cipx-hook-launcher <event>
+# where <event> is session-start | pre-tool-use (set in hooks.json per
+# hook entry). The launcher dispatches to `opik-cipx hook claude_code <event>`.
+#
+# Search order for the binary:
+#   1. opik-cipx on $PATH
+#   2. ~/.opik-cipx/bin/opik-cipx
+#   3. /usr/local/bin/opik-cipx
+#
+# On miss: stderr hint + exit 0 so CC keeps running.
+
+set -u
+
+event="${1:-}"
+if [ -z "$event" ]; then
+  echo "opik-cipx-hook-launcher: missing <event> arg (expected session-start | pre-tool-use)" >&2
+  exit 0
+fi
+
+find_bin() {
+  if command -v opik-cipx >/dev/null 2>&1; then
+    command -v opik-cipx
+    return 0
+  fi
+  for candidate in "$HOME/.opik-cipx/bin/opik-cipx" "/usr/local/bin/opik-cipx"; do
+    if [ -x "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+bin="$(find_bin)" || {
+  echo "opik-cipx not found. Run /opik:install (or bash <(curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh)) to install. Tracing is currently disabled." >&2
+  exit 0
+}
+
+exec "$bin" hook claude_code "$event"

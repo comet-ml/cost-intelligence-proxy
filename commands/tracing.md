@@ -7,8 +7,8 @@ allowed-tools:
   - Write
 ---
 
-You are running the `/opik:tracing` command. Toggle whether cipx ships spans
-to Opik for the current project (or globally with `--global`).
+You are running the `/opik-cipx:tracing` command. Toggle whether opik-cipx ships
+spans to Opik for the current project (or globally with `--global`).
 
 Tracing state is stored in marker files:
 
@@ -46,4 +46,4 @@ Action based on the user's argument:
   - The value of `OPIK_CC_TRACING_ENABLED` env if set
 
 After flipping state, mention that changes take effect within a few seconds —
-cipx watches the runtime config and hot-reloads (no restart needed).
+opik-cipx watches the runtime config and hot-reloads (no restart needed).

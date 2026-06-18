@@ -1,11 +1,12 @@
-# Cost Intelligence Proxy for Claude Code (cipx)
+# Cost Intelligence Proxy for Claude Code (opik-cipx)
 
-`cipx` is a local HTTPS proxy that sits between Claude Code and the Anthropic
-API. It captures every call on the wire, categorizes the input and output
-bytes into cost buckets — system prompt, tools, memory, agents, skills, MCP,
-user input, tool I/O — and ships per-call spans to
-[Opik](https://github.com/comet-ml/opik) so you can answer "where did my
-tokens go and how much did they cost?"
+`opik-cipx` is a local reverse HTTP proxy that sits between Claude Code and
+the Anthropic API. Claude Code routes through it via `ANTHROPIC_BASE_URL`;
+opik-cipx owns the TLS leg to `api.anthropic.com`. It captures every call on
+the wire, categorizes input/output bytes into cost buckets — system prompt,
+tools, memory, agents, skills, MCP, user input, tool I/O — and ships
+per-call spans to [Opik](https://github.com/comet-ml/opik) so you can answer
+"where did my tokens go and how much did they cost?"
 
 > **Status:** pre-release scaffolding. Releases tagged `v0.0.x` exercise the
 > build pipeline; the binaries do not yet do useful work. Wait for `v0.1.0`+
@@ -26,16 +27,17 @@ tokens go and how much did they cost?"
 - **MCP per-server breakdowns** — see which MCP server is costing you tokens.
 - **Survives Opik outages** — local WAL spools spans; the shipper drains when
   Opik comes back.
-- **One binary, two roles** — `cipx` is the long-lived gateway; `cipx-hook`
-  is the <50ms short-lived process invoked by Claude Code's session hooks.
+- **Single binary** — `opik-cipx` is the long-lived gateway *and* the
+  short-lived process Claude Code's session hooks invoke (subcommand
+  `opik-cipx hook claude_code <event>`).
 
 ## How it works
 
 ```
    ┌──────────────────────┐         ┌─────────────────────────────┐
-   │  Claude Code         │  TLS    │  cipx (localhost)           │   TLS
-   │  HTTPS_PROXY=cipx ──►│ ───────►│  MITM allowlisted hosts ────│ ─────► Anthropic API
-   │  NODE_EXTRA_CA_CERTS │         │  capture req + resp         │
+   │  Claude Code         │  HTTP   │  opik-cipx (127.0.0.1:9909) │   TLS
+   │  ANTHROPIC_BASE_URL ─┼────────►│  reverse proxy ─────────────┼──► Anthropic API
+   │  http://127.0.0.1:99 │         │  capture req + resp         │
    └──────────────────────┘         │  categorize + build span    │
                                     │  WAL spool → Opik shipper   │
                                     └────────────────┬────────────┘
@@ -44,15 +46,14 @@ tokens go and how much did they cost?"
                                                    Opik
 ```
 
-`cipx setup` creates a local CA, signs a leaf cert for the
-`api.anthropic.com` set, and installs a `SessionStart` hook on Claude Code.
-The hook calls `cipx-hook ensure-running` which double-fork-detaches the
-gateway if it isn't already alive. The wrapper `cipx run claude …` sets
-`HTTPS_PROXY` and `NODE_EXTRA_CA_CERTS` for the child Claude Code process —
-no global env pollution.
-
-Only `api.anthropic.com`, `statsig.anthropic.com`, and `claude.ai` get
-intercepted. CONNECTs to anything else are spliced raw, undecryptable.
+`opik-cipx setup` writes the SessionStart + PreToolUse hook scripts under
+`~/.claude/hooks/` and prints the `~/.claude/settings.json` snippet that
+points Claude Code at `http://127.0.0.1:9909` via `ANTHROPIC_BASE_URL`. The
+SessionStart hook calls `opik-cipx hook claude_code session-start`, which
+double-fork-detaches the gateway if it isn't already alive. No
+filesystem-level CA installs, no per-host MITM cert dance — Claude Code
+talks plain HTTP to the loopback listener and opik-cipx is the only thing
+holding a TLS session to Anthropic.
 
 ## Install
 
@@ -62,23 +63,23 @@ From within Claude Code:
 
 ```
 /plugin marketplace add comet-ml/cost-intelligence-proxy
-/plugin install opik@cost-intelligence
+/plugin install opik-cipx@opik-enterprise
 ```
 
-Then drop the binaries and finish setup with the plugin's own command:
+Then drop the binary and finish setup with the plugin's own command:
 
 ```
-/opik:install
+/opik-cipx:install
 ```
 
-The plugin installs the `SessionStart` hook that keeps the cipx gateway
-alive between Claude Code sessions, plus the `/opik:tracing`,
-`/opik:status`, and `/opik:viewer` slash commands. `/opik:install` is the
-one that downloads the actual binaries from this repo's releases and runs
-`cipx setup`.
+The plugin installs the `SessionStart` + `PreToolUse` hooks that keep the
+opik-cipx gateway alive between Claude Code sessions, plus the
+`/opik-cipx:tracing`, `/opik-cipx:status`, and `/opik-cipx:viewer` slash
+commands. `/opik-cipx:install` is the one that downloads the actual binary
+from this repo's releases and runs `opik-cipx setup`.
 
-Restart Claude Code after running `/opik:install` so the hook fires from a
-fresh process.
+Restart Claude Code after running `/opik-cipx:install` so the hook fires
+from a fresh process.
 
 ### Local plugin install (contributors)
 
@@ -87,12 +88,12 @@ instead of the published version:
 
 ```
 /plugin marketplace add /path/to/cost-intelligence-proxy
-/plugin install opik@cost-intelligence
+/plugin install opik-cipx@opik-enterprise
 ```
 
 ### macOS / Linux (curl, no plugin)
 
-If you'd rather skip the plugin and just run `cipx` from your shell:
+If you'd rather skip the plugin and just run `opik-cipx` from your shell:
 
 > The repo is still private, so `install.sh` needs a `GH_TOKEN` with read
 > access to release assets. Once we go public this drops away.
@@ -102,19 +103,19 @@ GH_TOKEN=ghp_yourtoken \
   curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh | bash
 ```
 
-The installer downloads the latest release for your OS/arch, drops `cipx` and
-`cipx-hook` into `~/.cipx/bin/`, and prints the next step. Add that path to
-your `PATH`, then:
+The installer downloads the latest release for your OS/arch, drops
+`opik-cipx` into `~/.opik-cipx/bin/`, and prints the next step. Add that
+path to your `PATH`, then:
 
 ```bash
-cipx setup       # one-time: generates CA, signs leaf cert, installs CC hook
-cipx run claude  # launch claude with HTTPS_PROXY + NODE_EXTRA_CA_CERTS set
+opik-cipx setup            # one-time: writes the CC hooks + prints the settings.json snippet
+opik-cipx ensure-running   # spawn the gateway if it isn't already up
 ```
 
 To pin a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh | bash -s -- v0.0.2
+curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh | bash -s -- v0.0.3
 ```
 
 ### Manual download
@@ -124,18 +125,19 @@ Grab the right archive from the
 
 | Filename | Platform |
 |---|---|
-| `cipx-darwin-arm64.tar.gz` | Apple Silicon macOS |
-| `cipx-darwin-amd64.tar.gz` | Intel macOS |
-| `cipx-linux-amd64.tar.gz`  | x86_64 Linux |
-| `cipx-linux-arm64.tar.gz`  | arm64 Linux |
-| `cipx-windows-amd64.zip`   | Windows |
+| `opik-cipx-darwin-arm64.tar.gz` | Apple Silicon macOS |
+| `opik-cipx-darwin-amd64.tar.gz` | Intel macOS |
+| `opik-cipx-linux-amd64.tar.gz`  | x86_64 Linux |
+| `opik-cipx-linux-arm64.tar.gz`  | arm64 Linux |
+| `opik-cipx-windows-amd64.zip`   | Windows |
 
-Each archive contains both `cipx` and `cipx-hook`. Verify against
-`SHA256SUMS` from the same release before extracting:
+Each archive contains the `opik-cipx` binary. Verify against `SHA256SUMS`
+from the same release before extracting:
 
 ```bash
 shasum -a 256 -c <(grep darwin-arm64 SHA256SUMS)
-tar -xzf cipx-darwin-arm64.tar.gz -C ~/.cipx/bin/
+mkdir -p ~/.opik-cipx/bin
+tar -xzf opik-cipx-darwin-arm64.tar.gz -C ~/.opik-cipx/bin/
 ```
 
 ### Enterprise install (managed settings)
@@ -152,13 +154,13 @@ Clients pick it up at next startup or within the hourly poll.
 ```json
 {
   "extraKnownMarketplaces": {
-    "cost-intelligence": {
+    "opik-enterprise": {
       "source": {"source": "github", "repo": "comet-ml/cost-intelligence-proxy"},
       "autoUpdate": true
     }
   },
   "enabledPlugins": {
-    "opik@cost-intelligence": true
+    "opik-cipx@opik-enterprise": true
   },
   "env": {
     "OPIK_CC_TRACING_ENABLED": "true",
@@ -191,10 +193,10 @@ What each piece does:
   launch until fresh managed settings are fetched, so the brief unenforced
   window on first launch can't leak unmonitored sessions.
 
-The binaries themselves still need to land on each machine separately —
-enabling the plugin via managed settings gives every user the slash commands
-and the hook wiring, but the actual `cipx` binary is downloaded by
-`/opik:install` (or `install.sh` in a provisioning script — see the
+The binary itself still needs to land on each machine separately — enabling
+the plugin via managed settings gives every user the slash commands and the
+hook wiring, but the actual `opik-cipx` binary is downloaded by
+`/opik-cipx:install` (or `install.sh` in a provisioning script — see the
 [#provisioning](#provisioning) section).
 
 **Available `{field}` tokens:**
@@ -225,8 +227,8 @@ pip install opik
 opik configure
 ```
 
-This creates `~/.opik.config` with your API URL, key, and workspace. `cipx`
-reads this file when the matching env var isn't set.
+This creates `~/.opik.config` with your API URL, key, and workspace.
+`opik-cipx` reads this file when the matching env var isn't set.
 
 ### Environment variables
 
@@ -247,30 +249,30 @@ same machine.
 |---|---|
 | `OPIK_CC_TRACING_ENABLED` | Org-wide master switch. `true` or `1` enables; anything else disables. Designed for managed-settings deployment. |
 | `OPIK_CC_PROJECT` | Project name (default `claude-code`). Supports `{field}` templating against the OAuth identity — see Enterprise install above. |
-| `OPIK_CC_WORKSPACE` | Workspace override scoped to cipx (leaves global `OPIK_WORKSPACE` alone). |
-| `OPIK_CC_DEBUG` | `true` → verbose logging to `~/.cipx/logs/cipx.log`. |
+| `OPIK_CC_WORKSPACE` | Workspace override scoped to opik-cipx (leaves global `OPIK_WORKSPACE` alone). |
+| `OPIK_CC_DEBUG` | `true` → verbose logging to `~/.opik-cipx/logs/cipx.log`. |
 | `OPIK_CC_TRUNCATE_FIELDS` | `false` → ship full payloads (default truncates large fields). |
 | `OPIK_CC_PARENT_TRACE_ID` | Attach every span under an existing Opik trace — useful for CI runs that wrap CC in an outer trace. |
 | `OPIK_CC_ROOT_SPAN_ID` | Attach under a specific root span within `OPIK_CC_PARENT_TRACE_ID`. |
 
-All cipx env vars use the `OPIK_CC_` prefix or `CIPX_` to avoid conflicts
-with the standard Opik SDK variables.
+All opik-cipx env vars use the `OPIK_CC_` prefix or `CIPX_` to avoid
+conflicts with the standard Opik SDK variables.
 
-#### cipx-specific
+#### opik-cipx-specific
 
 | Variable | Purpose |
 |---|---|
 | `CIPX_SENTRY` | `off` disables anonymous error reporting (on by default). |
-| `CIPX_PORT` | Force a specific listener port (default: dynamic, written to `~/.cipx/port`). |
+| `CIPX_PORT` | Force a specific listener port (default `9909`, written to `~/.opik-cipx/port`). |
 | `CIPX_UPSTREAM_PROXY` | Forward outbound traffic through this proxy. |
-| `CIPX_CONFIG` | Path to the cipx config file (default `~/.cipx/config.toml`). |
+| `CIPX_CONFIG` | Path to the opik-cipx config file (default `~/.opik-cipx/config.toml`). |
 | `CIPX_CAPTURE_CONTENT` | `false` ships counts and costs only, never prompt or completion bytes. Hot-reloadable. |
 | `CIPX_SAMPLE_RATE` | Fraction of LLM calls to ship spans for (0.0–1.0). Hot-reloadable. |
 
 ### `~/.opik.config` integration
 
-Keep cipx's settings in a dedicated `[opik_cc]` section so they don't disturb
-the SDK config:
+Keep opik-cipx's settings in a dedicated `[opik_cc]` section so they don't
+disturb the SDK config:
 
 ```ini
 [opik]
@@ -306,7 +308,7 @@ with another instance's key will fail auth.
 
 ### Tracing on/off per project
 
-cipx is off-by-default. Resolution precedence (first match wins):
+opik-cipx is off-by-default. Resolution precedence (first match wins):
 
 1. **Project-level marker** — `.claude/.opik-tracing-enabled` in the cwd
    - Content `off` or `disabled` → disabled (per-repo opt-out wins over global
@@ -328,8 +330,8 @@ echo debug > .claude/.opik-tracing-enabled      # enable + debug logging
 rm .claude/.opik-tracing-enabled                # fall through to env / user / default
 ```
 
-Changes take effect within seconds — cipx watches the runtime config and
-hot-reloads.
+Changes take effect within seconds — opik-cipx watches the runtime config
+and hot-reloads.
 
 ## Privacy: redacted-mode
 
@@ -340,7 +342,7 @@ set:
 export CIPX_CAPTURE_CONTENT=false
 ```
 
-cipx then ships counts, costs, structure, and identity — but never the
+opik-cipx then ships counts, costs, structure, and identity — but never the
 prompt or completion bytes. Specifically dropped:
 
 - `span.input` / `span.output` (raw request and response on the LLM-call span)
@@ -360,26 +362,26 @@ false, applied_at: <ts>}` so consumers can filter
 
 ## Slash commands (plugin)
 
-After `/plugin install opik@cost-intelligence`:
+After `/plugin install opik-cipx@opik-enterprise`:
 
 | Command | Purpose |
 |---|---|
-| `/opik:install` | Download the cipx binaries for your OS/arch and run `cipx setup`. Idempotent — also used to upgrade. |
-| `/opik:tracing on \| off \| debug \| status` | Toggle the project's tracing marker (or the global one with `--global`). `status` prints the effective state and how it resolved. |
-| `/opik:status` | Show proxy pid, port, queue depth, last shipped span, last Opik error, telemetry on/off. |
-| `/opik:viewer` | Launch the local debug viewer in the background and print its URL. |
+| `/opik-cipx:install` | Download the opik-cipx binary for your OS/arch and run `opik-cipx setup`. Idempotent — also used to upgrade. |
+| `/opik-cipx:tracing on \| off \| debug \| status` | Toggle the project's tracing marker (or the global one with `--global`). `status` prints the effective state and how it resolved. |
+| `/opik-cipx:status` | Show proxy pid, port, queue depth, last shipped span, last Opik error, telemetry on/off. |
+| `/opik-cipx:viewer` | Launch the local debug viewer in the background and print its URL. |
 
 ## Debugging
 
 ```bash
-cipx status                # pid, port, queue depth, last Opik error, telemetry on/off
-cipx logs                  # tail ~/.cipx/logs/cipx.log
-cipx viewer                # local HTTP UI on 127.0.0.1: list captures, see where each byte was attributed
+opik-cipx status   # pid, port, queue depth, last Opik error, telemetry on/off
+opik-cipx logs     # tail ~/.opik-cipx/logs/cipx.log
+opik-cipx viewer   # local HTTP UI on 127.0.0.1: list captures, see where each byte was attributed
 ```
 
-`cipx viewer` renders the raw request body with every region colored by the
-category it landed in — red bytes are unattributed, indicating a categorizer
-gap or a new CC wire-format variant.
+`opik-cipx viewer` renders the raw request body with every region colored by
+the category it landed in — red bytes are unattributed, indicating a
+categorizer gap or a new CC wire-format variant.
 
 ## External trace linking
 
@@ -391,15 +393,15 @@ export OPIK_CC_PARENT_TRACE_ID="your-trace-id"
 export OPIK_CC_ROOT_SPAN_ID="your-span-id"
 ```
 
-All cipx spans land under the existing trace/span instead of creating new
-session-level traces.
+All opik-cipx spans land under the existing trace/span instead of creating
+new session-level traces.
 
 ## MCP server setup
 
 The [Opik MCP server](https://github.com/comet-ml/opik-mcp) gives Claude
 tools to query your Opik data — traces, experiments, evaluation results —
-directly in conversation. It's independent of cipx (cipx ingests traces; the
-MCP server queries them).
+directly in conversation. It's independent of opik-cipx (opik-cipx ingests
+traces; the MCP server queries them).
 
 For Opik Cloud, add to `~/.claude.json`:
 
@@ -420,20 +422,22 @@ For self-hosted Opik, replace with `--apiBaseUrl http://localhost:5173/api`
 ## Uninstall
 
 ```bash
-cipx purge          # stops the gateway, wipes ~/.cipx/spool
-rm -rf ~/.cipx      # remove certs, runtime.json, binaries
-rm ~/.claude/hooks/SessionStart   # if cipx setup installed it (it's idempotent — won't touch hooks it didn't write)
+opik-cipx purge       # stops the gateway, wipes ~/.opik-cipx/spool
+opik-cipx uninstall   # removes ~/.opik-cipx and the managed CC hook scripts
 ```
+
+`opik-cipx uninstall` only deletes hook scripts whose first line carries the
+opik-cipx managed-header marker, so it won't touch hooks you wrote by hand.
 
 ## Provisioning
 
-For deploying cipx across a team:
+For deploying opik-cipx across a team:
 
-- **Homebrew tap** (planned) — `brew install comet-ml/tap/cipx`.
+- **Homebrew tap** (planned) — `brew install comet-ml/tap/opik-cipx`.
 - **Provisioning script** — drop `install.sh` into Ansible / Chef / Salt /
   whatever you already use.
-- **Container images** — none yet; the binaries are statically linked so
-  copying them in works.
+- **Container images** — none yet; the binary is statically linked so
+  copying it in works.
 
 If you're at an org with a managed-settings rollout, pair the install with
 the JSON in [Enterprise install](#enterprise-install-managed-settings) above.

@@ -1,6 +1,6 @@
 {
   "hooks": {
-    "SessionStart": [{"hooks": [{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cipx-hook-launcher"}]}],
-    "PreToolUse":  [{"hooks": [{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/cipx-hook-launcher"}]}]
+    "SessionStart": [{"hooks": [{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/opik-cipx-hook-launcher session-start"}]}],
+    "PreToolUse":   [{"hooks": [{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/opik-cipx-hook-launcher pre-tool-use"}]}]
   }
 }

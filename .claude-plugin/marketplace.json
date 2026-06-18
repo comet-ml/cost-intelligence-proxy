@@ -1,12 +1,12 @@
 {
-  "name": "cost-intelligence",
+  "name": "opik-enterprise",
   "owner": {
     "name": "Comet ML",
     "url": "https://comet.com"
   },
   "plugins": [
     {
-      "name": "opik",
+      "name": "opik-cipx",
       "source": "./",
       "description": "Cost intelligence proxy for Claude Code — captures every Anthropic API call, attributes tokens to cost buckets (system prompt, tools, MCP, memory, skills, agents, user, tool I/O), and ships per-call spans to Opik.",
       "author": {
