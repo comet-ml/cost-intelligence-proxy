@@ -66,20 +66,14 @@ From within Claude Code:
 /plugin install opik-cipx@opik-enterprise
 ```
 
-Then drop the binary and finish setup with the plugin's own command:
-
-```
-/opik-cipx:install
-```
-
 The plugin installs the `SessionStart` + `PreToolUse` hooks that keep the
 opik-cipx gateway alive between Claude Code sessions, plus the
-`/opik-cipx:tracing`, `/opik-cipx:status`, and `/opik-cipx:viewer` slash
-commands. `/opik-cipx:install` is the one that downloads the actual binary
-from this repo's releases and runs `opik-cipx setup`.
+`/opik-cipx:status` slash command. The hooks tolerate a missing binary —
+they just print a hint to install opik-cipx and let the session continue.
 
-Restart Claude Code after running `/opik-cipx:install` so the hook fires
-from a fresh process.
+Drop the binary with `install.sh` (see below) or by downloading a release
+archive manually, then run `opik-cipx setup` once. Restart Claude Code so
+the hooks fire from a fresh process.
 
 ### Local plugin install (contributors)
 
@@ -193,11 +187,11 @@ What each piece does:
   launch until fresh managed settings are fetched, so the brief unenforced
   window on first launch can't leak unmonitored sessions.
 
-The binary itself still needs to land on each machine separately — enabling
-the plugin via managed settings gives every user the slash commands and the
-hook wiring, but the actual `opik-cipx` binary is downloaded by
-`/opik-cipx:install` (or `install.sh` in a provisioning script — see the
-[#provisioning](#provisioning) section).
+The binary itself still needs to land on each machine separately —
+enabling the plugin via managed settings gives every user the hook wiring
+and the `/opik-cipx:status` slash command, but the actual `opik-cipx`
+binary is dropped by `install.sh` in your provisioning script — see the
+[#provisioning](#provisioning) section.
 
 **Available `{field}` tokens:**
 
@@ -366,10 +360,7 @@ After `/plugin install opik-cipx@opik-enterprise`:
 
 | Command | Purpose |
 |---|---|
-| `/opik-cipx:install` | Download the opik-cipx binary for your OS/arch and run `opik-cipx setup`. Idempotent — also used to upgrade. |
-| `/opik-cipx:tracing on \| off \| debug \| status` | Toggle the project's tracing marker (or the global one with `--global`). `status` prints the effective state and how it resolved. |
 | `/opik-cipx:status` | Show proxy pid, port, queue depth, last shipped span, last Opik error, telemetry on/off. |
-| `/opik-cipx:viewer` | Launch the local debug viewer in the background and print its URL. |
 
 ## Debugging
 
