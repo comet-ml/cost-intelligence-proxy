@@ -157,11 +157,10 @@ Clients pick it up at next startup or within the hourly poll.
     "opik-cipx@opik-enterprise": true
   },
   "env": {
-    "OPIK_CC_TRACING_ENABLED": "true",
-    "OPIK_BASE_URL": "https://www.comet.com/opik/api",
-    "OPIK_CC_WORKSPACE": "your-org-cc-workspace",
-    "OPIK_API_KEY": "<workspace-scoped API key>",
-    "OPIK_CC_PROJECT": "cc-{username}"
+    "OPIK_CIPX_BASE_URL": "https://www.comet.com/opik/api",
+    "OPIK_CIPX_WORKSPACE": "your-org-cc-workspace",
+    "OPIK_CIPX_API_KEY": "<workspace-scoped API key>",
+    "OPIK_CIPX_PROJECT": "cc-{username}"
   },
   "forceRemoteSettingsRefresh": true
 }
@@ -172,15 +171,13 @@ What each piece does:
 - `extraKnownMarketplaces` + `enabledPlugins` — registers this repo as a
   marketplace and force-enables the plugin for every user. Users see it as
   **managed** and can't disable it.
-- `OPIK_CC_TRACING_ENABLED=true` — turns tracing on for every session without
-  users dropping per-project files. Individual projects can still opt out by
-  writing `off` to `.claude/.opik-tracing-enabled`.
-- `OPIK_CC_WORKSPACE` — sends Claude Code traces to a dedicated workspace,
+- `OPIK_CIPX_BASE_URL` — Opik installation URL the gateway ships traces to.
+- `OPIK_CIPX_WORKSPACE` — sends Claude Code traces to a dedicated workspace,
   isolated from any user's personal Opik work in `~/.opik.config`.
-- `OPIK_API_KEY` — the workspace-scoped key the gateway uses to write traces.
-  Treat as sensitive; the key is shared with every machine it's deployed to.
-  Provision with the minimum write scope on the CC workspace.
-- `OPIK_CC_PROJECT` — supports `{field}` tokens that expand from the user's
+- `OPIK_CIPX_API_KEY` — the workspace-scoped key the gateway uses to write
+  traces. Treat as sensitive; the key is shared with every machine it's
+  deployed to. Provision with the minimum write scope on the CC workspace.
+- `OPIK_CIPX_PROJECT` — supports `{field}` tokens that expand from the user's
   Claude Code OAuth identity. So one config string routes every user to their
   own project.
 - `forceRemoteSettingsRefresh: true` — fail-closed startup: blocks the CLI at
@@ -226,31 +223,19 @@ This creates `~/.opik.config` with your API URL, key, and workspace.
 
 ### Environment variables
 
-#### Opik connection (shared with the Opik SDK)
-
-| Variable | Purpose | Falls back to |
-|---|---|---|
-| `OPIK_BASE_URL` | Opik installation URL | `url_override` in `~/.opik.config` |
-| `OPIK_API_KEY` | API key | `api_key` in `~/.opik.config` |
-| `OPIK_WORKSPACE` | Workspace | `workspace` in `~/.opik.config` |
-
-#### Claude Code-scoped (`OPIK_CC_*`)
-
-Override the shared values without affecting other Opik SDK consumers on the
-same machine.
+All opik-cipx env vars use the `OPIK_CIPX_` prefix (Opik destination
+credentials) or `CIPX_` (proxy behavior) so they don't collide with the
+standard Opik SDK variables (`OPIK_API_KEY`, `OPIK_WORKSPACE`, etc.) — users
+running both opik-cipx and a regular Opik client can configure them
+independently.
 
 | Variable | Purpose |
 |---|---|
-| `OPIK_CC_TRACING_ENABLED` | Org-wide master switch. `true` or `1` enables; anything else disables. Designed for managed-settings deployment. |
-| `OPIK_CC_PROJECT` | Project name (default `claude-code`). Supports `{field}` templating against the OAuth identity — see Enterprise install above. |
-| `OPIK_CC_WORKSPACE` | Workspace override scoped to opik-cipx (leaves global `OPIK_WORKSPACE` alone). |
-| `OPIK_CC_DEBUG` | `true` → verbose logging to `~/.opik-cipx/logs/cipx.log`. |
-| `OPIK_CC_TRUNCATE_FIELDS` | `false` → ship full payloads (default truncates large fields). |
-| `OPIK_CC_PARENT_TRACE_ID` | Attach every span under an existing Opik trace — useful for CI runs that wrap CC in an outer trace. |
-| `OPIK_CC_ROOT_SPAN_ID` | Attach under a specific root span within `OPIK_CC_PARENT_TRACE_ID`. |
-
-All opik-cipx env vars use the `OPIK_CC_` prefix or `CIPX_` to avoid
-conflicts with the standard Opik SDK variables.
+| `OPIK_CIPX_BASE_URL` | Opik installation URL (e.g. `https://www.comet.com/opik/api`). |
+| `OPIK_CIPX_API_KEY` | API key the gateway uses to write traces. |
+| `OPIK_CIPX_WORKSPACE` | Opik workspace traces land in. |
+| `OPIK_CIPX_PROJECT` | Project name. Supports `{email}`, `{user}`, `{hostname}` templating — see Enterprise install above. |
+| `OPIK_CIPX_DEBUG` | `true`/`on` → verbose shipper logging to `~/.opik-cipx/logs/spawn.log`. |
 
 #### opik-cipx-specific
 
