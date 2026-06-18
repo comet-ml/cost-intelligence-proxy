@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
-# Locate opik-cipx and exec its hook subcommand. The plugin doesn't ship
-# the binary itself — users run /opik:install once (or curl install.sh)
-# to drop opik-cipx into ~/.opik-cipx/bin/. This launcher tolerates a
-# missing binary without blocking the Claude Code session (spec §4.1
-# step 3: hook must never fail CC).
+# Locate opik-cipx and exec its hook subcommand. Binaries ship inside the
+# plugin tree at bin/opik-cipx-<os>-<arch>/opik-cipx — pushed there by the
+# release workflow in the internal source repo — so a clean plugin install
+# already has the right binary on disk. PATH / ~/.opik-cipx/bin/ are kept
+# as fallbacks for curl-installed setups and dev-time overrides.
 #
 # Invoked as:
 #   opik-cipx-hook-launcher <event>
 # where <event> is session-start | pre-tool-use (set in hooks.json per
 # hook entry). The launcher dispatches to `opik-cipx hook claude_code <event>`.
 #
-# Search order for the binary:
-#   1. opik-cipx on $PATH
-#   2. ~/.opik-cipx/bin/opik-cipx
-#   3. /usr/local/bin/opik-cipx
+# Search order:
+#   1. ${CLAUDE_PLUGIN_ROOT}/bin/opik-cipx-<os>-<arch>/opik-cipx (plugin-shipped)
+#   2. opik-cipx on $PATH
+#   3. ~/.opik-cipx/bin/opik-cipx
+#   4. /usr/local/bin/opik-cipx
 #
 # On miss: stderr hint + exit 0 so CC keeps running.
 
@@ -26,6 +27,19 @@ if [ -z "$event" ]; then
 fi
 
 find_bin() {
+  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+    os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    arch="$(uname -m)"
+    case "$arch" in
+      x86_64|amd64) arch=amd64 ;;
+      arm64|aarch64) arch=arm64 ;;
+    esac
+    shipped="${CLAUDE_PLUGIN_ROOT}/bin/opik-cipx-${os}-${arch}/opik-cipx"
+    if [ -x "$shipped" ]; then
+      echo "$shipped"
+      return 0
+    fi
+  fi
   if command -v opik-cipx >/dev/null 2>&1; then
     command -v opik-cipx
     return 0
