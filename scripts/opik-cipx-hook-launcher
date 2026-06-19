@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Locate opik-cipx and exec its hook subcommand. Binaries ship inside the
-# plugin tree at bin/opik-cipx-<os>-<arch>/opik-cipx — pushed there by the
-# release workflow in the internal source repo — so a clean plugin install
-# already has the right binary on disk. PATH / ~/.opik-cipx/bin/ are kept
-# as fallbacks for curl-installed setups and dev-time overrides.
+# Locate opik-cipx and exec `opik-cipx sync` — the idempotent entry
+# point for every CC hook (SessionStart, UserPromptSubmit, StopFailure).
+# sync supervises the daemon, brings it up if missing, and points CC's
+# ANTHROPIC_BASE_URL at it. The hook event arg passed by CC (if any) is
+# ignored: sync is the same operation in every case.
 #
-# Invoked as:
-#   opik-cipx-hook-launcher <event>
-# where <event> is session-start | pre-tool-use (set in hooks.json per
-# hook entry). The launcher dispatches to `opik-cipx hook claude_code <event>`.
+# Binaries ship inside the plugin tree at bin/opik-cipx-<os>-<arch>/
+# opik-cipx — pushed there by the release workflow in the internal
+# source repo — so a clean plugin install already has the right binary
+# on disk. PATH / ~/.opik-cipx/bin/ are kept as fallbacks for curl-
+# installed setups and dev-time overrides.
 #
 # Search order:
 #   1. ${CLAUDE_PLUGIN_ROOT}/bin/opik-cipx-<os>-<arch>/opik-cipx (plugin-shipped)
@@ -19,12 +20,6 @@
 # On miss: stderr hint + exit 0 so CC keeps running.
 
 set -u
-
-event="${1:-}"
-if [ -z "$event" ]; then
-  echo "opik-cipx-hook-launcher: missing <event> arg (expected session-start | pre-tool-use)" >&2
-  exit 0
-fi
 
 find_bin() {
   if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
@@ -58,4 +53,4 @@ bin="$(find_bin)" || {
   exit 0
 }
 
-exec "$bin" hook claude_code "$event"
+exec "$bin" sync
