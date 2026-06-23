@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Locate opik-cipx and exec `opik-cipx sync` — the idempotent entry
-# point for every CC hook (SessionStart, UserPromptSubmit, StopFailure).
-# sync supervises the daemon, brings it up if missing, and points CC's
-# ANTHROPIC_BASE_URL at it. The hook event arg passed by CC (if any) is
-# ignored: sync is the same operation in every case.
+# point for the CC SessionStart hook. sync supervises the daemon, brings
+# it up if missing, and points CC's ANTHROPIC_BASE_URL at it. The hook
+# event arg passed by CC (if any) is ignored: sync is the same operation
+# in every case, so this launcher works under any hook event.
 #
 # Binaries ship inside the plugin tree at bin/opik-cipx-<os>-<arch>/
 # opik-cipx — pushed there by the release workflow in the internal
@@ -49,7 +49,7 @@ find_bin() {
 }
 
 bin="$(find_bin)" || {
-  echo "opik-cipx not found. Run /opik:install (or bash <(curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh)) to install. Tracing is currently disabled." >&2
+  echo "opik-cipx not found. Reinstall the plugin (/plugin install opik-cipx@opik-enterprise) or run: bash <(curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh). opik-cipx is not capturing until it's installed." >&2
   exit 0
 }
 

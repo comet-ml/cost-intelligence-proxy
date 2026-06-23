@@ -60,4 +60,4 @@ tar -xzf "$tmp/$archive" -C "$CIPX_INSTALL_DIR"
 chmod +x "$CIPX_INSTALL_DIR"/opik-cipx
 
 echo "opik-cipx: installed $CIPX_VERSION to $CIPX_INSTALL_DIR"
-echo "opik-cipx: add $CIPX_INSTALL_DIR to your PATH, then run \`opik-cipx setup\`."
+echo "opik-cipx: add $CIPX_INSTALL_DIR to your PATH, then run \`opik-cipx sync\`."

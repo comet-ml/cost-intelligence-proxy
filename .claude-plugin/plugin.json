@@ -16,8 +16,5 @@
     "cost",
     "tokens",
     "claude-code"
-  ],
-  "skills": [
-    "./commands/"
   ]
 }

@@ -28,8 +28,8 @@ per-call spans to [Opik](https://github.com/comet-ml/opik) so you can answer
 - **Survives Opik outages** — local WAL spools spans; the shipper drains when
   Opik comes back.
 - **Single binary** — `opik-cipx` is the long-lived gateway *and* the
-  short-lived process Claude Code's session hooks invoke (subcommand
-  `opik-cipx hook claude_code <event>`).
+  short-lived process Claude Code's `SessionStart` hook invokes (subcommand
+  `opik-cipx sync`).
 
 ## How it works
 
@@ -46,14 +46,14 @@ per-call spans to [Opik](https://github.com/comet-ml/opik) so you can answer
                                                    Opik
 ```
 
-`opik-cipx setup` writes the SessionStart + PreToolUse hook scripts under
-`~/.claude/hooks/` and prints the `~/.claude/settings.json` snippet that
-points Claude Code at `http://127.0.0.1:9909` via `ANTHROPIC_BASE_URL`. The
-SessionStart hook calls `opik-cipx hook claude_code session-start`, which
-double-fork-detaches the gateway if it isn't already alive. No
-filesystem-level CA installs, no per-host MITM cert dance — Claude Code
-talks plain HTTP to the loopback listener and opik-cipx is the only thing
-holding a TLS session to Anthropic.
+The plugin's `SessionStart` hook execs `opik-cipx sync` on every Claude Code
+launch. `sync` is idempotent: it installs the OS supervisor (launchd /
+systemd) so the daemon auto-restarts on crash, brings the daemon up if it
+isn't already running, and upserts `ANTHROPIC_BASE_URL` into
+`~/.claude/settings.json` so Claude Code routes through
+`http://127.0.0.1:9909`. No filesystem-level CA installs, no per-host MITM
+cert dance — Claude Code talks plain HTTP to the loopback listener and
+opik-cipx is the only thing holding a TLS session to Anthropic.
 
 ## Install
 
@@ -66,14 +66,15 @@ From within Claude Code:
 /plugin install opik-cipx@opik-enterprise
 ```
 
-The plugin installs the `SessionStart` + `PreToolUse` hooks that keep the
-opik-cipx gateway alive between Claude Code sessions, plus the
-`/opik-cipx:status` slash command. The hooks tolerate a missing binary —
-they just print a hint to install opik-cipx and let the session continue.
+The plugin installs the `SessionStart` hook that keeps the opik-cipx gateway
+alive between Claude Code sessions, plus the `/opik-cipx:opik-cipx` skill
+(how it works + diagnostics). The hook tolerates a missing binary — it just
+prints a hint to install opik-cipx and lets the session continue.
 
-Drop the binary with `install.sh` (see below) or by downloading a release
-archive manually, then run `opik-cipx setup` once. Restart Claude Code so
-the hooks fire from a fresh process.
+The plugin ships the binary in its own tree, so a clean plugin install needs
+nothing more. For a non-plugin setup, drop the binary with `install.sh` (see
+below), then restart Claude Code — the `SessionStart` hook runs `opik-cipx
+sync`, which wires everything up.
 
 ### Local plugin install (contributors)
 
@@ -102,8 +103,8 @@ The installer downloads the latest release for your OS/arch, drops
 path to your `PATH`, then:
 
 ```bash
-opik-cipx setup            # one-time: writes the CC hooks + prints the settings.json snippet
-opik-cipx ensure-running   # spawn the gateway if it isn't already up
+opik-cipx sync     # supervise + start the daemon and route Claude Code through it
+opik-cipx status   # confirm it's up
 ```
 
 To pin a specific version:
@@ -186,7 +187,7 @@ What each piece does:
 
 The binary itself still needs to land on each machine separately —
 enabling the plugin via managed settings gives every user the hook wiring
-and the `/opik-cipx:status` slash command, but the actual `opik-cipx`
+and the `/opik-cipx:opik-cipx` skill, but the actual `opik-cipx`
 binary is dropped by `install.sh` in your provisioning script — see the
 [#provisioning](#provisioning) section.
 
@@ -241,12 +242,12 @@ independently.
 
 | Variable | Purpose |
 |---|---|
+| `CIPX_DISABLED` | Master kill-switch. Truthy (`1`/`true`/`yes`/`on`) tears the install down on the next `opik-cipx sync` so Claude Code routes directly to Anthropic. |
 | `CIPX_SENTRY` | `off` disables anonymous error reporting (on by default). |
-| `CIPX_PORT` | Force a specific listener port (default `9909`, written to `~/.opik-cipx/port`). |
+| `CIPX_SENTRY_DSN` | Sentry DSN for anonymous panic/error reports. Telemetry is opt-in via this DSN. |
 | `CIPX_UPSTREAM_PROXY` | Forward outbound traffic through this proxy. |
 | `CIPX_CONFIG` | Path to the opik-cipx config file (default `~/.opik-cipx/config.toml`). |
-| `CIPX_CAPTURE_CONTENT` | `false` ships counts and costs only, never prompt or completion bytes. Hot-reloadable. |
-| `CIPX_SAMPLE_RATE` | Fraction of LLM calls to ship spans for (0.0–1.0). Hot-reloadable. |
+| `CIPX_CAPTURE_CONTENT` | `false` ships counts and costs only, never prompt or completion bytes. |
 
 ### `~/.opik.config` integration
 
@@ -285,32 +286,40 @@ project_name = claude-code
 Set `url_override` and `api_key` together — a URL pointing at one instance
 with another instance's key will fail auth.
 
-### Tracing on/off per project
+### Turning capture on and off
 
-opik-cipx is off-by-default. Resolution precedence (first match wins):
+There's no per-project marker file and no per-repo toggle — **installing the
+plugin is the opt-in.** Once it's installed, every Claude Code session runs
+`opik-cipx sync` at SessionStart, which keeps the proxy supervised and points
+Claude Code's `ANTHROPIC_BASE_URL` at it. From then on every call is captured
+automatically; there is nothing to switch on per repo.
 
-1. **Project-level marker** — `.claude/.opik-tracing-enabled` in the cwd
-   - Content `off` or `disabled` → disabled (per-repo opt-out wins over global
-     enable)
-   - Content `debug` → enabled + debug mode
-   - Any other content (including empty) → enabled
-2. **`OPIK_CC_TRACING_ENABLED` env** — `true` or `1` enables; anything else
-   disables.
-3. **User-level marker** — `~/.claude/.opik-tracing-enabled`, same content
-   semantics.
-4. **Default** — disabled.
-
-Toggle from the shell:
+To turn capture **off**, set the `CIPX_DISABLED` kill-switch (any of `1`,
+`true`, `yes`, `on`):
 
 ```bash
-echo > .claude/.opik-tracing-enabled            # enable for this repo
-echo off > .claude/.opik-tracing-enabled        # disable just this repo
-echo debug > .claude/.opik-tracing-enabled      # enable + debug logging
-rm .claude/.opik-tracing-enabled                # fall through to env / user / default
+export CIPX_DISABLED=1
 ```
 
-Changes take effect within seconds — opik-cipx watches the runtime config
-and hot-reloads.
+It's an environment variable, not a file, so it applies wherever it's set — a
+single shell or your whole login environment. The next `opik-cipx sync` (i.e.
+the next SessionStart) reads it and **tears the install down**: it removes the
+launchd / systemd supervisor unit and clears the managed `ANTHROPIC_BASE_URL`,
+so Claude Code routes straight to Anthropic with no proxy in the path. As a
+backstop, `opik-cipx proxy` also exits 0 immediately when launched while
+disabled, so a stray supervisor can't resurrect it. Either way your Claude
+Code session stays healthy — disabling never breaks the wire.
+
+To turn capture back **on**:
+
+```bash
+unset CIPX_DISABLED
+opik-cipx sync          # or just restart Claude Code — SessionStart runs sync
+```
+
+Settings take effect only on (re)start — there is no mid-session hot-reload.
+Toggling `CIPX_DISABLED` means restarting Claude Code, or re-running
+`opik-cipx sync`, before the change is picked up.
 
 ## Privacy: redacted-mode
 
@@ -339,13 +348,13 @@ Every span shipped under redaction carries `cc.privacy = {capture_content:
 false, applied_at: <ts>}` so consumers can filter
 `WHERE cc.privacy.capture_content = false`.
 
-## Slash commands (plugin)
+## Skills (plugin)
 
 After `/plugin install opik-cipx@opik-enterprise`:
 
-| Command | Purpose |
+| Skill | Purpose |
 |---|---|
-| `/opik-cipx:status` | Show proxy pid, port, queue depth, last shipped span, last Opik error, telemetry on/off. |
+| `/opik-cipx:opik-cipx` | How opik-cipx works — architecture, the CLI, state layout, enable/disable, privacy/telemetry, and how to read `opik-cipx status`. Claude pulls it in on its own when you ask about opik-cipx or when spans stop reaching Opik; you can also call it directly. |
 
 ## Debugging
 
