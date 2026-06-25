@@ -1,5 +1,6 @@
 {
   "hooks": {
-    "SessionStart": [{"hooks": [{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/opik-cipx-hook-launcher session-start"}]}]
+    "SessionStart": [{"hooks": [{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/opik-cipx-hook-launcher session-start"}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/opik-cipx-hook-launcher user-prompt-submit"}]}]
   }
 }
