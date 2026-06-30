@@ -1,6 +1,6 @@
 {
   "name": "opik-cipx",
-  "version": "0.0.25",
+  "version": "0.0.26",
   "description": "Cost intelligence proxy for Claude Code. Installs hooks that keep the opik-cipx gateway alive between sessions; the gateway captures every Anthropic API call and ships cost-attributed spans to Opik.",
   "author": {
     "name": "Comet ML",
