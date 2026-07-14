@@ -1,0 +1,21 @@
+{
+  "name": "opik-cipx",
+  "version": "0.0.1",
+  "description": "Cost intelligence proxy for Codex. Installs a SessionStart hook that keeps the opik-cipx gateway alive between sessions and points Codex's base URLs at it; the gateway captures every OpenAI/ChatGPT API call and ships cost-attributed spans to Opik.",
+  "author": {
+    "name": "Comet ML",
+    "url": "https://comet.com"
+  },
+  "repository": "https://github.com/comet-ml/cost-intelligence-proxy",
+  "homepage": "https://github.com/comet-ml/cost-intelligence-proxy",
+  "license": "Apache-2.0",
+  "hooks": "./hooks.json",
+  "keywords": [
+    "opik",
+    "observability",
+    "tracing",
+    "cost",
+    "tokens",
+    "codex"
+  ]
+}
