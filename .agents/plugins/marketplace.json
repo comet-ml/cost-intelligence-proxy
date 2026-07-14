@@ -1,0 +1,19 @@
+{
+  "name": "opik-enterprise",
+  "interface": {
+    "displayName": "Opik Enterprise"
+  },
+  "plugins": [
+    {
+      "name": "opik-cipx",
+      "source": {
+        "source": "local",
+        "path": "./plugins/opik-cipx"
+      },
+      "policy": {
+        "installation": "AVAILABLE"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Locate opik-cipx and exec `opik-cipx sync codex` — the idempotent entry
+# point for the Codex SessionStart hook. sync supervises the shared daemon,
+# brings it up if missing, and points Codex's openai_base_url / chatgpt_base_url
+# at it (scope=codex, so it only ever touches ~/.codex/config.toml). The hook
+# event arg passed by Codex is ignored: sync is the same operation every time.
+#
+# Codex injects CLAUDE_PLUGIN_ROOT (and PLUGIN_ROOT) into the hook env — the
+# same var Claude Code sets. The hook runs from the session cwd, not the plugin
+# root, so the command in hooks.json MUST reference ${CLAUDE_PLUGIN_ROOT}.
+#
+# This plugin ships NO binary of its own — `codex plugin add` copies only the
+# plugin subtree (it does not follow symlinks), so bundling a binary would mean
+# a second committed copy of the same artifact the Claude Code plugin already
+# carries. Instead the binary lives once per machine in the shared
+# ~/.opik-cipx/bin, and this launcher bootstraps it there on first run if it's
+# absent (a Codex-only box that never ran install.sh).
+#
+# Resolve order:
+#   1. ${CLAUDE_PLUGIN_ROOT}/bin/opik-cipx-<os>-<arch>/opik-cipx (dev override)
+#   2. opik-cipx on $PATH
+#   3. ~/.opik-cipx/bin/opik-cipx
+#   4. /usr/local/bin/opik-cipx
+#   5. bootstrap: fetch the release into ~/.opik-cipx/bin, then re-resolve
+#
+# On miss: stderr hint + exit 0 so Codex keeps running.
+
+set -u
+
+CIPX_REPO="comet-ml/cost-intelligence-proxy"
+CIPX_INSTALL_DIR="${CIPX_INSTALL_DIR:-$HOME/.opik-cipx/bin}"
+
+os_arch() {
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64|amd64) arch=amd64 ;;
+    arm64|aarch64) arch=arm64 ;;
+  esac
+}
+
+find_bin() {
+  os_arch
+  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+    shipped="${CLAUDE_PLUGIN_ROOT}/bin/opik-cipx-${os}-${arch}/opik-cipx"
+    if [ -x "$shipped" ]; then
+      echo "$shipped"
+      return 0
+    fi
+  fi
+  if command -v opik-cipx >/dev/null 2>&1; then
+    command -v opik-cipx
+    return 0
+  fi
+  for candidate in "$CIPX_INSTALL_DIR/opik-cipx" "/usr/local/bin/opik-cipx"; do
+    if [ -x "$candidate" ]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# bootstrap_bin fetches the matching release tarball into the shared install
+# dir — the same resolve-latest + tar flow install.sh uses. Best-effort: any
+# missing tool, auth failure (private repo needs GH_TOKEN), or slow network
+# returns non-zero and the caller degrades to the not-found hint. Bounded so a
+# hung endpoint can't stall the Codex session.
+bootstrap_bin() {
+  command -v curl >/dev/null 2>&1 || return 1
+  command -v tar  >/dev/null 2>&1 || return 1
+  os_arch
+  case "$os" in darwin|linux) ;; *) return 1 ;; esac
+  archive="opik-cipx-${os}-${arch}.tar.gz"
+
+  hdrs=(-H "Accept: application/vnd.github+json")
+  [ -n "${GH_TOKEN:-}" ] && hdrs+=(-H "Authorization: Bearer ${GH_TOKEN}")
+  ver="$(curl -fsSL --connect-timeout 5 --max-time 20 "${hdrs[@]}" \
+    "https://api.github.com/repos/${CIPX_REPO}/releases/latest" \
+    | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)"
+  [ -n "$ver" ] || return 1
+
+  url="https://github.com/${CIPX_REPO}/releases/download/${ver}/${archive}"
+  tmp="$(mktemp -d)" || return 1
+  curl_args=(-fsSL --connect-timeout 5 --max-time 60)
+  [ -n "${GH_TOKEN:-}" ] && curl_args+=(-H "Authorization: Bearer ${GH_TOKEN}")
+  if curl "${curl_args[@]}" -o "$tmp/$archive" "$url"; then
+    mkdir -p "$CIPX_INSTALL_DIR"
+    tar -xzf "$tmp/$archive" -C "$CIPX_INSTALL_DIR" 2>/dev/null \
+      && chmod +x "$CIPX_INSTALL_DIR/opik-cipx" 2>/dev/null
+  fi
+  rm -rf "$tmp"
+  [ -x "$CIPX_INSTALL_DIR/opik-cipx" ]
+}
+
+bin="$(find_bin)" || {
+  bootstrap_bin >&2 || true
+  bin="$(find_bin)" || {
+    echo "opik-cipx not found and bootstrap failed. Run: bash <(curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh). Codex is not capturing until it's installed." >&2
+    exit 0
+  }
+}
+
+exec "$bin" sync codex
