@@ -8,24 +8,26 @@ tools, memory, agents, skills, MCP, user input, tool I/O — and ships
 per-call spans to [Opik](https://github.com/comet-ml/opik) so you can answer
 "where did my tokens go and how much did they cost?"
 
-> **Status:** pre-release scaffolding. Releases tagged `v0.0.x` exercise the
-> build pipeline; the binaries do not yet do useful work. Wait for `v0.1.0`+
-> before deploying for real. Source lives in
+> **Status:** actively developed, versioned `v0.0.x`. This repo is the public
+> distribution point: it ships the prebuilt binaries (see
+> [Releases](https://github.com/comet-ml/cost-intelligence-proxy/releases)) and
+> the Claude Code plugin. The source lives in the private
 > [comet-ml/cost-intelligence-proxy-internal](https://github.com/comet-ml/cost-intelligence-proxy-internal)
-> (currently private).
+> repo; each release is built from there.
 
 ## Features
 
 - **Wire capture** — totals come straight from Anthropic's `response.usage`,
   so token counts and costs are exact, not estimated.
 - **Per-category attribution** — request + response bytes are bucketed (system
-  prompt, builtin tools, MCP servers, skills, memory, custom agents, prior
+  prompt, builtin tools, MCP tools, skills, memory, custom agents, prior
   assistant turns, tool I/O, user prompts, …) using chars-proportional math
   over the actual wire bytes. No tokenizer dependency.
-- **Subagent + compaction aware** — subagent calls peer under the same trace;
-  `/compact` triggers carry a `cc.compaction` flag with size deltas.
-- **MCP per-server breakdowns** — see which MCP server is costing you tokens.
-- **Survives Opik outages** — local WAL spools spans; the shipper drains when
+- **Subagent aware** — subagent calls are captured and peer under the same
+  session.
+- **MCP attribution** — MCP tool definitions and results are bucketed
+  separately so you can see what your MCP servers cost.
+- **Survives Opik outages** — a local WAL spools spans; the shipper drains when
   Opik comes back.
 - **Single binary** — `opik-cipx` is the long-lived gateway *and* the
   short-lived process Claude Code's `SessionStart` hook invokes (subcommand
@@ -90,12 +92,8 @@ instead of the published version:
 
 If you'd rather skip the plugin and just run `opik-cipx` from your shell:
 
-> The repo is still private, so `install.sh` needs a `GH_TOKEN` with read
-> access to release assets. Once we go public this drops away.
-
 ```bash
-GH_TOKEN=ghp_yourtoken \
-  curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh | bash
 ```
 
 The installer downloads the latest release for your OS/arch, drops
@@ -110,7 +108,7 @@ opik-cipx status   # confirm it's up
 To pin a specific version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh | bash -s -- v0.0.3
+curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh | bash -s -- v0.0.35
 ```
 
 ### Manual download
@@ -124,7 +122,6 @@ Grab the right archive from the
 | `opik-cipx-darwin-amd64.tar.gz` | Intel macOS |
 | `opik-cipx-linux-amd64.tar.gz`  | x86_64 Linux |
 | `opik-cipx-linux-arm64.tar.gz`  | arm64 Linux |
-| `opik-cipx-windows-amd64.zip`   | Windows |
 
 Each archive contains the `opik-cipx` binary. Verify against `SHA256SUMS`
 from the same release before extracting:
@@ -161,7 +158,7 @@ Clients pick it up at next startup or within the hourly poll.
     "OPIK_CIPX_BASE_URL": "https://www.comet.com/opik/api",
     "OPIK_CIPX_WORKSPACE": "your-org-cc-workspace",
     "OPIK_CIPX_API_KEY": "<workspace-scoped API key>",
-    "OPIK_CIPX_PROJECT": "cc-{username}"
+    "OPIK_CIPX_PROJECT": "cc-{user}"
   },
   "forceRemoteSettingsRefresh": true
 }
@@ -174,13 +171,12 @@ What each piece does:
   **managed** and can't disable it.
 - `OPIK_CIPX_BASE_URL` — Opik installation URL the gateway ships traces to.
 - `OPIK_CIPX_WORKSPACE` — sends Claude Code traces to a dedicated workspace,
-  isolated from any user's personal Opik work in `~/.opik.config`.
+  isolated from any user's personal Opik work.
 - `OPIK_CIPX_API_KEY` — the workspace-scoped key the gateway uses to write
   traces. Treat as sensitive; the key is shared with every machine it's
   deployed to. Provision with the minimum write scope on the CC workspace.
-- `OPIK_CIPX_PROJECT` — supports `{field}` tokens that expand from the user's
-  Claude Code OAuth identity. So one config string routes every user to their
-  own project.
+- `OPIK_CIPX_PROJECT` — supports `{field}` tokens (see below), so one config
+  string routes every user to their own project.
 - `forceRemoteSettingsRefresh: true` — fail-closed startup: blocks the CLI at
   launch until fresh managed settings are fetched, so the brief unenforced
   window on first launch can't leak unmonitored sessions.
@@ -189,102 +185,72 @@ The binary itself still needs to land on each machine separately —
 enabling the plugin via managed settings gives every user the hook wiring
 and the `/opik-cipx:opik-cipx` skill, but the actual `opik-cipx`
 binary is dropped by `install.sh` in your provisioning script — see the
-[#provisioning](#provisioning) section.
+[Provisioning](#provisioning) section.
 
-**Available `{field}` tokens:**
+**Available `{field}` tokens** for `OPIK_CIPX_PROJECT`:
 
 | Token | Resolves to |
 |---|---|
-| `{username}` | local-part of email (before `@`) — e.g. `collinc` |
-| `{email}` / `{user_email}` | full email — e.g. `collinc@comet.com` |
-| `{user_uuid}` | Anthropic account UUID |
-| `{display_name}` | OAuth display name |
-| `{org_name}` | Anthropic organization name |
-| `{org_uuid}` | Anthropic organization UUID |
+| `{user}` | local-part of the user's email (before `@`) — e.g. `collinc` |
+| `{email}` | full email — e.g. `collinc@comet.com` |
+| `{hostname}` | machine hostname |
 
-Unknown tokens pass through literally so misconfigurations are visible in
-Opik rather than silently producing empty project names.
-
-Per-trace identity (`cc.identity.user_email`, `cc.identity.user_uuid`,
-`cc.identity.org_uuid`) is also attached to every trace regardless of project
-name, plus a `user:<email>` tag, so admins can filter across users in a
-shared project too.
+The gateway also resolves the signed-in user's identity (email, username,
+organization) and attaches it to every trace, so admins can filter by user
+even inside a shared project.
 
 ## Configuration
 
-Run the Opik CLI to configure the connection if you haven't already:
-
-```bash
-pip install opik
-opik configure
-```
-
-This creates `~/.opik.config` with your API URL, key, and workspace.
-`opik-cipx` reads this file when the matching env var isn't set.
+Point the gateway at your Opik installation with the `OPIK_CIPX_*` environment
+variables (below) or a `~/.opik-cipx/config.toml` file. Resolution precedence
+is **env var → `~/.opik-cipx/config.toml` → built-in default**, and changes
+take effect on the next daemon (re)start — there is no mid-session hot-reload.
 
 ### Environment variables
 
-All opik-cipx env vars use the `OPIK_CIPX_` prefix (Opik destination
-credentials) or `CIPX_` (proxy behavior) so they don't collide with the
-standard Opik SDK variables (`OPIK_API_KEY`, `OPIK_WORKSPACE`, etc.) — users
-running both opik-cipx and a regular Opik client can configure them
-independently.
+opik-cipx env vars use the `OPIK_CIPX_` prefix (Opik destination credentials)
+or `CIPX_` (proxy behavior) so they don't collide with the standard Opik SDK
+variables (`OPIK_API_KEY`, `OPIK_WORKSPACE`, etc.) — users running both
+opik-cipx and a regular Opik client can configure them independently.
 
 | Variable | Purpose |
 |---|---|
 | `OPIK_CIPX_BASE_URL` | Opik installation URL (e.g. `https://www.comet.com/opik/api`). |
 | `OPIK_CIPX_API_KEY` | API key the gateway uses to write traces. |
 | `OPIK_CIPX_WORKSPACE` | Opik workspace traces land in. |
-| `OPIK_CIPX_PROJECT` | Project name. Supports `{email}`, `{user}`, `{hostname}` templating — see Enterprise install above. |
-| `OPIK_CIPX_DEBUG` | `true`/`on` → verbose shipper logging to `~/.opik-cipx/logs/spawn.log`. |
+| `OPIK_CIPX_PROJECT` | Project name. Supports `{user}`, `{email}`, `{hostname}` templating — see Enterprise install above. |
+| `OPIK_CIPX_DEBUG` | `true`/`on` → verbose logging to `~/.opik-cipx/logs/cipx.log`. |
 
 #### opik-cipx-specific
 
 | Variable | Purpose |
 |---|---|
 | `CIPX_DISABLED` | Master kill-switch. Truthy (`1`/`true`/`yes`/`on`) tears the install down on the next `opik-cipx sync` so Claude Code routes directly to Anthropic. |
-| `CIPX_SENTRY` | `off` disables anonymous error reporting (on by default). |
-| `CIPX_SENTRY_DSN` | Sentry DSN for anonymous panic/error reports. Telemetry is opt-in via this DSN. |
-| `CIPX_UPSTREAM_PROXY` | Forward outbound traffic through this proxy. |
-| `CIPX_CONFIG` | Path to the opik-cipx config file (default `~/.opik-cipx/config.toml`). |
 | `CIPX_CAPTURE_CONTENT` | `false` ships counts and costs only, never prompt or completion bytes. |
+| `CIPX_HOME` | Override the state root (default `~/.opik-cipx`). |
+| `CIPX_CONFIG` | Path to the opik-cipx config file (default `~/.opik-cipx/config.toml`). |
+| `CIPX_UPSTREAM_PROXY` | Forward outbound traffic through this proxy. |
+| `CIPX_SENTRY` | `off` disables anonymous error reporting. |
+| `CIPX_SENTRY_DSN` | Sentry DSN for anonymous panic/error reports. Telemetry stays off unless this is set. |
 
-### `~/.opik.config` integration
+### Config file (`~/.opik-cipx/config.toml`)
 
-Keep opik-cipx's settings in a dedicated `[opik_cc]` section so they don't
-disturb the SDK config:
+Anything you can set with an `OPIK_CIPX_*` / `CIPX_*` env var can also live in
+`~/.opik-cipx/config.toml` (env vars win when both are set):
 
-```ini
+```toml
 [opik]
-url_override = https://www.comet.com/opik/api/
-api_key = your-api-key
-workspace = my-sdk-workspace
-project_name = my-sdk-project
+base_url  = "https://www.comet.com/opik/api"
+api_key   = "your-api-key"
+workspace = "comet-all"
+project   = "cc-{user}"
 
-[opik_cc]
-workspace = comet-all
-project_name = claude-code
+[capture]
+capture_content = true
 ```
 
-The plugin reads keys it recognises (`workspace`, `project_name`,
-`url_override`, `api_key`) from the whole file, with later values overriding
-earlier ones — so the `[opik_cc]` values win only when that section comes
-last. Environment variables (`OPIK_CC_WORKSPACE`, `OPIK_CC_PROJECT`) always
-take precedence over the file.
-
-You can also override `url_override` and `api_key` in `[opik_cc]` to point
-Claude Code traces at a **different Opik instance** than the SDK:
-
-```ini
-[opik_cc]
-url_override = https://my-other-opik/api/
-api_key = other-instance-api-key
-workspace = comet-all
-project_name = claude-code
-```
-
-Set `url_override` and `api_key` together — a URL pointing at one instance
-with another instance's key will fail auth.
+Override the file's location with `$CIPX_CONFIG`, or the whole state root with
+`$CIPX_HOME`.
 
 ### Turning capture on and off
 
@@ -331,22 +297,10 @@ export CIPX_CAPTURE_CONTENT=false
 ```
 
 opik-cipx then ships counts, costs, structure, and identity — but never the
-prompt or completion bytes. Specifically dropped:
-
-- `span.input` / `span.output` (raw request and response on the LLM-call span)
-- Sub-span `input` / `output` (tool args + tool_results)
-- `cc.user_prompt.text` (keeps `text_chars`)
-- `cc.slash_command.args` and `<local-command-stdout>` (keeps the lengths)
-- `cc.tool_io.by_tool[*].sample_chars` (keeps counts and lengths)
-
-Kept: all `cc.categories` numbers, `cc.usage`, `cc.metrics_rollup`,
-`cc.tools.summary`, `cc.slash_commands.summary.by_command[*]`, all
-`cc.skills` / `cc.memory` / `cc.agents` metadata (paths, SHAs, body_tokens —
-not body text).
-
-Every span shipped under redaction carries `cc.privacy = {capture_content:
-false, applied_at: <ts>}` so consumers can filter
-`WHERE cc.privacy.capture_content = false`.
+raw prompt or completion bytes. Request/response bodies and tool
+arguments/results are dropped, while every `cc.categories` number, the
+`cc.usage` totals, and all category/skill/memory/agent metadata (paths,
+counts, lengths) are kept. Capturing content is the default.
 
 ## Skills (plugin)
 
@@ -359,27 +313,14 @@ After `/plugin install opik-cipx@opik-enterprise`:
 ## Debugging
 
 ```bash
-opik-cipx status   # pid, port, queue depth, last Opik error, telemetry on/off
+opik-cipx status   # pid, ports, queue depth, counters, telemetry on/off
 opik-cipx logs     # tail ~/.opik-cipx/logs/cipx.log
-opik-cipx viewer   # local HTTP UI on 127.0.0.1: list captures, see where each byte was attributed
+opik-cipx viewer   # print the local debug-UI URL (add --open to launch it)
 ```
 
-`opik-cipx viewer` renders the raw request body with every region colored by
-the category it landed in — red bytes are unattributed, indicating a
+The viewer renders the raw request body with every region colored by the
+category it landed in — unattributed bytes stand out, indicating a
 categorizer gap or a new CC wire-format variant.
-
-## External trace linking
-
-Link Claude Code sessions to existing Opik traces — useful for embedding CC
-in larger workflows:
-
-```bash
-export OPIK_CC_PARENT_TRACE_ID="your-trace-id"
-export OPIK_CC_ROOT_SPAN_ID="your-span-id"
-```
-
-All opik-cipx spans land under the existing trace/span instead of creating
-new session-level traces.
 
 ## MCP server setup
 
@@ -407,12 +348,14 @@ For self-hosted Opik, replace with `--apiBaseUrl http://localhost:5173/api`
 ## Uninstall
 
 ```bash
-opik-cipx purge       # stops the gateway, wipes ~/.opik-cipx/spool
-opik-cipx uninstall   # removes ~/.opik-cipx and the managed CC hook scripts
+opik-cipx purge       # stops the gateway, wipes the WAL spool (drops unshipped spans)
+opik-cipx uninstall   # stops the daemon, removes the supervisor unit, deletes ~/.opik-cipx
 ```
 
-`opik-cipx uninstall` only deletes hook scripts whose first line carries the
-opik-cipx managed-header marker, so it won't touch hooks you wrote by hand.
+`opik-cipx uninstall` clears the managed `ANTHROPIC_BASE_URL` and removes
+`~/.opik-cipx`, but the Claude Code plugin owns the `SessionStart` hook wiring
+— to remove that too, uninstall the plugin from Claude Code
+(`/plugin uninstall opik-cipx@opik-enterprise`).
 
 ## Provisioning
 
@@ -429,11 +372,11 @@ the JSON in [Enterprise install](#enterprise-install-managed-settings) above.
 
 ## Reporting issues
 
-While the repo is private, file issues on
-[comet-ml/cost-intelligence-proxy-internal](https://github.com/comet-ml/cost-intelligence-proxy-internal/issues).
-Once we go public the issue tracker on this repo becomes the primary entry
-point.
+File issues on the
+[issue tracker](https://github.com/comet-ml/cost-intelligence-proxy/issues)
+for this repo.
 
 ## License
 
-TBD — will be set before this repo becomes externally visible.
+Apache-2.0, as declared in the plugin manifests
+(`.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`).
