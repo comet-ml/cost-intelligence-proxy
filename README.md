@@ -378,5 +378,5 @@ for this repo.
 
 ## License
 
-Apache-2.0, as declared in the plugin manifests
-(`.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`).
+Apache-2.0 — see [`LICENSE`](./LICENSE). Matches the `license` field in the
+plugin manifests (`.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`).
