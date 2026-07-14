@@ -61,3 +61,4 @@ chmod +x "$CIPX_INSTALL_DIR"/opik-cipx
 
 echo "opik-cipx: installed $CIPX_VERSION to $CIPX_INSTALL_DIR"
 echo "opik-cipx: add $CIPX_INSTALL_DIR to your PATH, then run \`opik-cipx sync\`."
+echo "© 2026 Comet ML, Inc. All rights reserved. This software is proprietary and confidential."

@@ -8,7 +8,7 @@
   },
   "repository": "https://github.com/comet-ml/cost-intelligence-proxy",
   "homepage": "https://github.com/comet-ml/cost-intelligence-proxy",
-  "license": "Apache-2.0",
+  "license": "LicenseRef-Proprietary",
   "hooks": "./hooks.json",
   "keywords": [
     "opik",
