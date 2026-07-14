@@ -457,5 +457,5 @@ for this repo.
 
 ## License
 
-Apache-2.0 — see [`LICENSE`](./LICENSE). Matches the `license` field in the
-plugin manifests (`.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`).
+© 2026 Comet ML, Inc. All rights reserved. This software is proprietary and
+confidential.
