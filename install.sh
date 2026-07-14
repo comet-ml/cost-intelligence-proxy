@@ -4,10 +4,10 @@
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh | bash -s -- v0.1.0
+#   curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh | bash -s -- v0.0.35
 #
-# Note: while the repo is private, GH_TOKEN must be set with read access:
-#   GH_TOKEN=ghp_... curl ... | bash
+# The repo is public, so no auth is needed. GH_TOKEN is honored if set (e.g.
+# to raise the GitHub API rate limit).
 #
 # Override env vars:
 #   CIPX_VERSION      Tag to install (default: latest release)
@@ -29,12 +29,12 @@ case "$arch" in
 esac
 case "$os" in
   darwin|linux) ;;
-  *) echo "opik-cipx: unsupported os $os (use the Windows installer instead)" >&2; exit 1 ;;
+  *) echo "opik-cipx: unsupported os $os (only darwin and linux are supported)" >&2; exit 1 ;;
 esac
 
 archive="opik-cipx-${os}-${arch}.tar.gz"
 
-# Resolve "latest" via the GitHub API (works for private repos with GH_TOKEN).
+# Resolve "latest" via the GitHub API (GH_TOKEN honored if set).
 if [ "$CIPX_VERSION" = "latest" ]; then
   api="https://api.github.com/repos/${CIPX_REPO}/releases/latest"
   hdrs=(-H "Accept: application/vnd.github+json")
