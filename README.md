@@ -158,7 +158,8 @@ Clients pick it up at next startup or within the hourly poll.
     "OPIK_CIPX_BASE_URL": "https://www.comet.com/opik/api",
     "OPIK_CIPX_WORKSPACE": "your-org-cc-workspace",
     "OPIK_CIPX_API_KEY": "<workspace-scoped API key>",
-    "OPIK_CIPX_PROJECT": "cc-{user}"
+    "OPIK_CIPX_PROJECT": "cc-{user}",
+    "ENABLE_TOOL_SEARCH": "auto"
   },
   "forceRemoteSettingsRefresh": true
 }
@@ -177,6 +178,10 @@ What each piece does:
   deployed to. Provision with the minimum write scope on the CC workspace.
 - `OPIK_CIPX_PROJECT` — supports `{field}` tokens (see below), so one config
   string routes every user to their own project.
+- `ENABLE_TOOL_SEARCH` — routing Claude Code through opik-cipx sets a
+  non-Anthropic `ANTHROPIC_BASE_URL`, which makes CC (≥ 2.1.70) disable MCP
+  tool search by default. opik-cipx forwards requests unmodified, so it's safe
+  to keep on — `auto` restores it. (See the MDM section below for the details.)
 - `forceRemoteSettingsRefresh: true` — fail-closed startup: blocks the CLI at
   launch until fresh managed settings are fetched, so the brief unenforced
   window on first launch can't leak unmonitored sessions.
@@ -198,6 +203,80 @@ binary is dropped by `install.sh` in your provisioning script — see the
 The gateway also resolves the signed-in user's identity (email, username,
 organization) and attaches it to every trace, so admins can filter by user
 even inside a shared project.
+
+### Deploy via MDM (managed settings file)
+
+The [Enterprise install](#enterprise-install-managed-settings) above delivers
+config through Anthropic's admin console (server-managed settings). If you'd
+rather push it with your own MDM — Jamf, Intune, Workspace ONE, Ansible, a
+provisioning script — Claude Code also reads an **enterprise managed settings
+file** from a fixed system path. Land the same JSON there and every user on
+the machine picks it up at next launch; no per-user step.
+
+**Where the file goes** (Claude Code reads it automatically — no env var, no
+flag points at it):
+
+| Platform | Path |
+|---|---|
+| macOS | `/Library/Application Support/ClaudeCode/managed-settings.json` |
+| Linux / WSL | `/etc/claude-code/managed-settings.json` |
+| Windows | `C:\Program Files\ClaudeCode\managed-settings.json` |
+
+(The legacy Windows path `C:\ProgramData\ClaudeCode\managed-settings.json` was
+dropped in Claude Code v2.1.75.) To split config across files, drop `*.json`
+into a `managed-settings.d/` directory beside the file — they merge
+alphabetically on top of the base, systemd-style.
+
+Managed settings sit at the **top** of Claude Code's precedence chain —
+managed → command-line args → local project (`.claude/settings.local.json`) →
+project (`.claude/settings.json`) → user (`~/.claude/settings.json`) — so users
+can't override or disable what you set here. The file uses the same schema as
+`settings.json`.
+
+**What to put in it** — register the marketplace, force-enable the plugin, and
+set the Opik destination:
+
+```json
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "extraKnownMarketplaces": {
+    "opik-enterprise": {
+      "source": {"source": "github", "repo": "comet-ml/cost-intelligence-proxy"}
+    }
+  },
+  "enabledPlugins": {
+    "opik-cipx@opik-enterprise": true
+  },
+  "env": {
+    "OPIK_CIPX_BASE_URL": "https://www.comet.com/opik/api",
+    "OPIK_CIPX_WORKSPACE": "your-org-cc-workspace",
+    "OPIK_CIPX_API_KEY": "<workspace-scoped API key>",
+    "OPIK_CIPX_PROJECT": "cc-{user}",
+    "ENABLE_TOOL_SEARCH": "auto"
+  }
+}
+```
+
+Notes:
+
+- **Don't set `ANTHROPIC_BASE_URL` here.** `opik-cipx sync` writes it into the
+  user's `~/.claude/settings.json` pointing at the loopback listener
+  (`http://127.0.0.1:9909`), and clears it again when you flip the
+  `CIPX_DISABLED` kill-switch. Pinning it in managed settings would sit *above*
+  the user scope and defeat that teardown, leaving a disabled proxy in the wire
+  path. Let `sync` own it.
+- **`ENABLE_TOOL_SEARCH`** — because CC now talks to a non-Anthropic
+  `ANTHROPIC_BASE_URL`, it turns MCP tool search off by default (v2.1.70+).
+  opik-cipx is a transparent tee that forwards requests unmodified, so it's
+  safe to turn back on: `ENABLE_TOOL_SEARCH=auto` (or, equivalently,
+  `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`) restores it.
+- **The binary still ships separately.** Managed settings only carries the
+  plugin wiring and env — deploy the `opik-cipx` binary in the same MDM payload
+  with `install.sh` (see [Provisioning](#provisioning)).
+- To lock down which marketplaces users may add at all, pair
+  `extraKnownMarketplaces` with
+  [`strictKnownMarketplaces`](https://code.claude.com/docs/en/settings#strictknownmarketplaces)
+  in the same file.
 
 ## Configuration
 
