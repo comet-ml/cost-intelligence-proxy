@@ -278,6 +278,65 @@ Notes:
   [`strictKnownMarketplaces`](https://code.claude.com/docs/en/settings#strictknownmarketplaces)
   in the same file.
 
+#### Step-by-step: rolling it out with any MDM
+
+Any MDM that can run a script as root — or simply place a file — can deploy this:
+Jamf, Kandji, Intune, Workspace ONE, JumpCloud, Ansible, or a plain provisioning
+script. The mechanics are the same everywhere:
+
+1. **Prepare the JSON.** Start from the managed-settings JSON above and fill in
+   your `OPIK_CIPX_WORKSPACE` and a workspace-scoped `OPIK_CIPX_API_KEY`. Keep
+   this file out of version control — it carries a credential.
+
+2. **Deliver it to each device**, either way:
+
+   - **File payload** — have the MDM place the JSON at the managed path for the
+     OS (paths table above), owned by `root`, mode `0644`. It must be
+     world-readable: Claude Code reads it as the *logged-in user*, not as root.
+
+   - **Script payload** — run a small root script that writes and validates the
+     file. This is the most portable option, and writing into a
+     `managed-settings.d/` drop-in means you won't clobber any other managed
+     policy already on the machine. macOS example:
+
+     ```bash
+     #!/bin/bash
+     set -euo pipefail
+     DIR="/Library/Application Support/ClaudeCode/managed-settings.d"
+     /bin/mkdir -p "$DIR"
+     TMP="$(/usr/bin/mktemp)"
+     /bin/cat > "$TMP" <<'JSON'
+     { ...your filled managed-settings JSON... }
+     JSON
+     /usr/bin/plutil -convert json -o /dev/null "$TMP"   # validate; abort if invalid
+     /bin/mv "$TMP" "$DIR/50-opik-cipx.json"
+     /usr/sbin/chown root:wheel "$DIR/50-opik-cipx.json"
+     /bin/chmod 644 "$DIR/50-opik-cipx.json"
+     ```
+
+     On Linux use `/etc/claude-code/managed-settings.d/` and validate with
+     `python3 -m json.tool` instead of `plutil`. Use absolute tool paths — MDM
+     script runners often execute with a minimal `PATH`.
+
+3. **Ship the binary in the same payload** — managed settings only carries the
+   plugin wiring and env; the `opik-cipx` binary lands via `install.sh`
+   (see [Provisioning](#provisioning)).
+
+4. **Verify** on a device, as the logged-in user, in a *fresh* Claude Code
+   session (managed settings load at startup):
+
+   ```sh
+   claude plugin list    # opik-cipx@opik-enterprise shows as enabled / managed
+   ```
+
+**Targeting and offline devices.** Scope the deployment to machines your current
+users actually own so decommissioned devices are excluded. MDMs that queue
+actions for offline devices (JumpCloud Commands, for example) apply the settings
+when each machine next checks in — leave the deployment in place rather than
+removing it, or offline machines never receive it. For MDMs that only act on
+online devices, re-run the deployment periodically to pick up machines as they
+come online and as new hires are onboarded.
+
 ## Configuration
 
 Point the gateway at your Opik installation with the `OPIK_CIPX_*` environment
