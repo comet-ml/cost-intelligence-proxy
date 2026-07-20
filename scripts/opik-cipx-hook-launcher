@@ -48,45 +48,15 @@ find_bin() {
 
 case "${1:-}" in
 compress)
-  # --- Diagnostic log ---------------------------------------------------
-  # Under Harbor /logs/agent is host-mounted (-> jobs/<ts>/<trial>/agent/);
-  # else fall back to ~/.opik-cipx/logs. Best-effort: a failed write never
-  # breaks the hook. Logged BEFORE find_bin so a re-run distinguishes
-  # never-fired (no line at all) from fired-but-binary-missing.
-  if [ -d /logs/agent ]; then log_dir=/logs/agent; else log_dir="$HOME/.opik-cipx/logs"; fi
-  mkdir -p "$log_dir" 2>/dev/null || true
-  log_file="$log_dir/compress-hook.log"
-  logln() { printf '%s %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*" >>"$log_file" 2>/dev/null || true; }
-  logln "invoked pid=$$ ppid=$PPID plugin_root=${CLAUDE_PLUGIN_ROOT:-unset} cwd=$PWD stdin_tty=$([ -t 0 ] && echo yes || echo no)"
-
   # Coarse gate: only the master switch, so a fully-disabled setup doesn't
   # spawn the binary on every Bash call. Which specific compress feature(s)
   # actually run (OPIK_CIPX_COMPRESS_GENERIC, and future feature flags) is
   # Go's decision, not shell's — the binary re-checks and requires both.
   truthy() { case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in 1|true|on|yes) return 0;; *) return 1;; esac; }
-  if ! truthy "${OPIK_CIPX_COMPRESS:-}"; then
-    logln "disabled (OPIK_CIPX_COMPRESS not enabled)"
-    exit 0
-  fi
+  truthy "${OPIK_CIPX_COMPRESS:-}" || exit 0
 
-  if ! bin="$(find_bin)"; then
-    logln "bin-not-found plugin_root=${CLAUDE_PLUGIN_ROOT:-unset}"
-    exit 0
-  fi
-  logln "bin=$bin"
-
-  # Capture-then-emit (not exec) so the result can be logged after the run.
-  payload="$(cat)"
-  out="$(printf '%s' "$payload" | "$bin" compress)"
-
-  case "$payload" in
-  *'"tool_name":"Bash"'* | *'"tool_name": "Bash"'*) tool=Bash ;;
-  *) tool=other ;;
-  esac
-  logln "tool=$tool in=${#payload} out=${#out} rewrote=$([ -n "$out" ] && echo yes || echo no)"
-
-  printf '%s' "$out"
-  exit 0
+  bin="$(find_bin)" || exit 0
+  exec "$bin" compress
   ;;
 *)
   bin="$(find_bin)" || {
