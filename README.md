@@ -8,6 +8,8 @@ tools, memory, agents, skills, MCP, user input, tool I/O — and ships
 per-call spans to [Opik](https://github.com/comet-ml/opik) so you can answer
 "where did my tokens go and how much did they cost?"
 
+[Opik](https://github.com/comet-ml/opik) is the open-source LLM observability and evaluation platform, built by [Comet](https://www.comet.com). opik-cipx is its cost lens for Claude Code.
+
 > **Status:** actively developed, versioned `v0.0.x`. This repo is the public
 > distribution point: it ships the prebuilt binaries (see
 > [Releases](https://github.com/comet-ml/cost-intelligence-proxy/releases)) and
@@ -513,6 +515,15 @@ the JSON in [Enterprise install](#enterprise-install-managed-settings) above.
 File issues on the
 [issue tracker](https://github.com/comet-ml/cost-intelligence-proxy/issues)
 for this repo.
+
+## Opik for Claude Code
+
+This repo is part of a set of tools for observing Claude Code and other coding agents with [Opik](https://github.com/comet-ml/opik):
+
+- [opik-claude-code-plugin](https://github.com/comet-ml/opik-claude-code-plugin): log Claude Code sessions as Opik traces, with skills and agents included
+- [ccsync](https://github.com/comet-ml/ccsync): export Claude Code conversation history to Opik
+- [cost-intelligence-proxy](https://github.com/comet-ml/cost-intelligence-proxy): meter Claude Code token spend and cost per call **(this repo)**
+- [opik-skills](https://github.com/comet-ml/opik-skills): agent skills for instrumenting your code with Opik
 
 ## License
 
