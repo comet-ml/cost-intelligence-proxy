@@ -449,16 +449,16 @@ After `/plugin install opik-cipx@opik-enterprise`:
 | Skill | Purpose |
 |---|---|
 | `/opik-cipx:opik-cipx` | How opik-cipx works — architecture, the CLI, state layout, enable/disable, privacy/telemetry, and how to read `opik-cipx status`. Claude pulls it in on its own when you ask about opik-cipx or when spans stop reaching Opik; you can also call it directly. |
-| `/opik-cipx:cost-policy` | Which MCP servers your organization's cost policy denies for you, and how to turn one off or back on for yourself. Claude Code drops a denied server silently — it vanishes from `/mcp` and `claude mcp list` with no warning — so Claude pulls this in on its own when you ask where a server went. It reads the result of `opik-cipx mcp enable`/`disable` off the exit code, so a refusal is never reported back to you as a success. |
+| `/opik-cipx:cost-intelligence-policy` | Which MCP servers your organization's cost policy denies for you, and how to turn one off or back on for yourself. Claude Code drops a denied server silently — it vanishes from `/mcp` and `claude mcp list` with no warning — so Claude pulls this in on its own when you ask where a server went. It reads the result of `opik-cipx mcp enable`/`disable` off the exit code, so a refusal is never reported back to you as a success. |
 
 ## Commands (plugin)
 
 | Command | What it does |
 |---|---|
-| `/opik-cipx:cost-intelligence [thing]` | The receipt for "your Claude Code has been optimized". What cipx actually changed on this machine, what your organization's MCP policy actually blocks, what this session has cost, what the last 30 days cost and where the tokens went, which cost policies are in effect and who set each one — and, for anything a policy turned off, the one route that turns it back on. Every figure is measured, none estimated. Pass an MCP server, skill, tool or settings key to ask about just that one thing instead. |
-| `/opik-cipx:mcp-policy` | The MCP policy table on its own: which servers your organization blocks, which are active, and whether you can change it yourself. |
+| `/opik-cipx:cost-intelligence [thing]` | The receipt for "your Claude Code has been optimized". What cipx actually changed on this machine, what your organization's MCP policy actually blocks, what the last 30 days cost and where the tokens went, which cost policies are in effect and who set each one — and, for anything a policy turned off, the one route that turns it back on. Every figure is measured, none estimated. Pass an MCP server, skill, tool or settings key to ask about just that one thing instead. |
+| `/opik-cipx:cost-intelligence-mcp` | The MCP policy table on its own: which servers your organization blocks, which are active, and whether you can change it yourself. |
 
-Both commands and the `cost-policy` skill call `opik-cipx` as a bare command on
+Both commands and the `cost-intelligence-policy` skill call `opik-cipx` as a bare command on
 PATH, which the plugin supplies only from the release that adds the
 `bin/opik-cipx` dispatcher — on an earlier plugin version they fail with
 `command not found` or `unknown command`.
