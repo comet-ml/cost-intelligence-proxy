@@ -110,12 +110,22 @@ fi
 
 # Make the program reachable by NAME, not only by address.
 #
-# WHY. `sync` has just installed a skill and slash commands that tell Claude to
-# run `opik-cipx mcp …` — by that bare name. The session hook records an
-# absolute path and does not care, so capture, org policy and the status line
-# work either way; it is only the terminal commands that need the name to
-# resolve. Without this the skill describes commands the shell answers
-# "command not found" to, and the model has no way to know why.
+# WHY. Two of the three things `sync` just installed name the program by its
+# bare name, and only one of them names a path:
+#
+#   - the session hook carries an ABSOLUTE path, so capture, the org policy loop
+#     and the base-URL management work whether or not PATH is set up
+#   - the status line key is the bare `opik-cipx statusline`, so off PATH the
+#     cipx row silently disappears. The developer's own line survives, because
+#     the key is written as `opik-cipx statusline || sh -c '<theirs>'` and Claude
+#     Code reads a status line's stdout only on exit 0
+#   - the skill and the slash commands tell Claude to run `opik-cipx mcp …`,
+#     which off PATH is exit 127 -- not one of the exit codes that command
+#     documents, so neither the developer nor the model can tell it apart from
+#     a real refusal
+#
+# So capture keeps working without this and everything a person looks at does
+# not.
 #
 # ~/.local/bin rather than /usr/local/bin: no sudo, per-user, and the
 # conventional home for exactly this. Created when absent, because many default
@@ -144,7 +154,7 @@ case ":$PATH:" in
       echo "opik-cipx: linked $link -> $CIPX_INSTALL_DIR/opik-cipx"
       case ":$PATH:" in
         *":$link_dir:"*) ;;
-        *) echo "opik-cipx: add $link_dir to your PATH — without it the Cost Intelligence commands (\`opik-cipx mcp list\`, and the /cost-intelligence commands that call them) will not resolve" ;;
+        *) echo "opik-cipx: add $link_dir to your PATH — without it the status line stays blank and the Cost Intelligence commands (\`opik-cipx mcp list\`, and the /cost-intelligence commands that call them) do not resolve. Capture is unaffected." ;;
       esac
     else
       echo "opik-cipx: could not link into $link_dir — add $CIPX_INSTALL_DIR to your PATH so the Cost Intelligence commands resolve" >&2
