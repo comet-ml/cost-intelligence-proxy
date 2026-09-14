@@ -499,9 +499,15 @@ opik-cipx purge       # stops the gateway, wipes the WAL spool (drops unshipped 
 opik-cipx uninstall   # stops the daemon, removes the supervisor unit, deletes ~/.opik-cipx
 ```
 
-`opik-cipx uninstall` clears the managed `ANTHROPIC_BASE_URL` and removes
-`~/.opik-cipx`, but the Claude Code plugin owns the `SessionStart` hook wiring
-— to remove that too, uninstall the plugin from Claude Code
+`opik-cipx uninstall` hands `ANTHROPIC_BASE_URL` back — to the upstream you
+had before cipx if there was one, otherwise to an empty value, which is Claude
+Code's default — removes the session hook, status line, skill and slash
+commands the binary wrote into `~/.claude`, and then deletes `~/.opik-cipx`.
+The delete happens only once those repairs are confirmed on disk; if one of
+them failed, `~/.opik-cipx` is left in place and the command exits non-zero
+with what to fix, so a machine is never left pointed at a dead port with no
+binary to repair it. The Claude Code plugin still owns its own `SessionStart`
+hook wiring — to remove that too, uninstall the plugin from Claude Code
 (`/plugin uninstall opik-cipx@opik-enterprise`).
 
 ## Provisioning
