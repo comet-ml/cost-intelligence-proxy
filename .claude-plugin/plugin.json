@@ -16,5 +16,17 @@
     "cost",
     "tokens",
     "claude-code"
-  ]
+  ],
+  "userConfig": {
+    "cacheTtl": {
+      "type": "string",
+      "title": "Prompt cache TTL",
+      "description": "How long the main thread's prompt cache lives: 1h on a subscription, 5m on a plain API key.",
+      "options": [
+        "1h",
+        "5m"
+      ],
+      "default": "1h"
+    }
+  }
 }
