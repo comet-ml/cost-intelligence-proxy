@@ -33,16 +33,21 @@ CIPX_INSTALL_DIR="${CIPX_INSTALL_DIR:-$HOME/.opik-cipx/bin}"
 os_arch() {
   os="$(uname -s | tr '[:upper:]' '[:lower:]')"
   arch="$(uname -m)"
+  case "$os" in
+    mingw*|msys*|cygwin*) os=windows ;;
+  esac
   case "$arch" in
     x86_64|amd64) arch=amd64 ;;
     arm64|aarch64) arch=arm64 ;;
   esac
+  exe=""
+  [ "$os" = windows ] && exe=.exe
 }
 
 find_bin() {
   os_arch
   if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
-    shipped="${CLAUDE_PLUGIN_ROOT}/bin/opik-cipx-${os}-${arch}/opik-cipx"
+    shipped="${CLAUDE_PLUGIN_ROOT}/bin/opik-cipx-${os}-${arch}/opik-cipx${exe}"
     if [ -x "$shipped" ]; then
       echo "$shipped"
       return 0
@@ -52,7 +57,7 @@ find_bin() {
     command -v opik-cipx
     return 0
   fi
-  for candidate in "$CIPX_INSTALL_DIR/opik-cipx" "/usr/local/bin/opik-cipx"; do
+  for candidate in "$CIPX_INSTALL_DIR/opik-cipx${exe}" "/usr/local/bin/opik-cipx"; do
     if [ -x "$candidate" ]; then
       echo "$candidate"
       return 0

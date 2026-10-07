@@ -20,6 +20,12 @@ runs the plugin's hook launcher, which locates the binary and execs
 operation every time). From then on every API call flows through opik-cipx.
 There is no per-project or per-repo toggle and no marker file.
 
+Supported hosts: macOS, Linux and Windows, amd64 and arm64. On Windows the
+hook runs under Git Bash (Claude Code's hook shell there) and resolves
+`opik-cipx.exe`; Git for Windows is required, PowerShell-only machines are not
+supported, and state lives under `%USERPROFILE%\.opik-cipx` instead of
+`~/.opik-cipx`.
+
 Wire path: Claude Code → `http://127.0.0.1:9909` (plain HTTP, loopback) →
 opik-cipx tees the request and response → forwards over TLS to Anthropic. The
 proxy only tees bytes; categorization and span-building run on a background
