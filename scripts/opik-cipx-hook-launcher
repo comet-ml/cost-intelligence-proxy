@@ -11,25 +11,38 @@
 # on disk. PATH / ~/.opik-cipx/bin/ are kept as fallbacks for curl-
 # installed setups and dev-time overrides.
 #
+# On Windows, Claude Code runs command hooks through Git Bash, so this same
+# script runs there: `uname -s` reports MINGW64_NT-… (or MSYS/CYGWIN), which
+# maps to the `windows` directory, and the binary carries an .exe suffix.
+#
 # Search order:
-#   1. ${CLAUDE_PLUGIN_ROOT}/bin/opik-cipx-<os>-<arch>/opik-cipx (plugin-shipped)
+#   1. ${CLAUDE_PLUGIN_ROOT}/bin/opik-cipx-<os>-<arch>/opik-cipx[.exe] (plugin-shipped)
 #   2. opik-cipx on $PATH
-#   3. ~/.opik-cipx/bin/opik-cipx
+#   3. ~/.opik-cipx/bin/opik-cipx[.exe]
 #   4. /usr/local/bin/opik-cipx
 #
 # On miss: stderr hint + exit 0 so CC keeps running.
 
 set -u
 
+os_arch() {
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  arch="$(uname -m)"
+  case "$os" in
+    mingw*|msys*|cygwin*) os=windows ;;
+  esac
+  case "$arch" in
+    x86_64|amd64) arch=amd64 ;;
+    arm64|aarch64) arch=arm64 ;;
+  esac
+  exe=""
+  [ "$os" = windows ] && exe=.exe
+}
+
 find_bin() {
+  os_arch
   if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
-    os="$(uname -s | tr '[:upper:]' '[:lower:]')"
-    arch="$(uname -m)"
-    case "$arch" in
-      x86_64|amd64) arch=amd64 ;;
-      arm64|aarch64) arch=arm64 ;;
-    esac
-    shipped="${CLAUDE_PLUGIN_ROOT}/bin/opik-cipx-${os}-${arch}/opik-cipx"
+    shipped="${CLAUDE_PLUGIN_ROOT}/bin/opik-cipx-${os}-${arch}/opik-cipx${exe}"
     if [ -x "$shipped" ]; then
       echo "$shipped"
       return 0
@@ -39,7 +52,7 @@ find_bin() {
     command -v opik-cipx
     return 0
   fi
-  for candidate in "$HOME/.opik-cipx/bin/opik-cipx" "/usr/local/bin/opik-cipx"; do
+  for candidate in "$HOME/.opik-cipx/bin/opik-cipx${exe}" "/usr/local/bin/opik-cipx"; do
     if [ -x "$candidate" ]; then
       echo "$candidate"
       return 0

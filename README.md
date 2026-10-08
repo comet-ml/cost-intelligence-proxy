@@ -12,8 +12,9 @@ per-call spans to [Opik](https://github.com/comet-ml/opik) so you can answer
 
 > **Status:** actively developed, versioned `v0.0.x`. This repo is the public
 > distribution point: it ships the prebuilt binaries (see
-> [Releases](https://github.com/comet-ml/cost-intelligence-proxy/releases)) and
-> the Claude Code plugin. The source lives in the private
+> [Releases](https://github.com/comet-ml/cost-intelligence-proxy/releases)) for
+> macOS, Linux and Windows (amd64 + arm64 each) and the Claude Code plugin. The
+> source lives in the private
 > [comet-ml/cost-intelligence-proxy-internal](https://github.com/comet-ml/cost-intelligence-proxy-internal)
 > repo; each release is built from there.
 
@@ -76,9 +77,15 @@ alive between Claude Code sessions, plus the `/opik-cipx:opik-cipx` skill
 prints a hint to install opik-cipx and lets the session continue.
 
 The plugin ships the binary in its own tree, so a clean plugin install needs
-nothing more. For a non-plugin setup, drop the binary with `install.sh` (see
-below), then restart Claude Code — the `SessionStart` hook runs `opik-cipx
-sync`, which wires everything up.
+nothing more. For a non-plugin setup, drop the binary with `install.sh` (or
+`install.ps1` on Windows, see below), then restart Claude Code — the
+`SessionStart` hook runs `opik-cipx sync`, which wires everything up.
+
+**Windows** needs [Git for Windows](https://git-scm.com/downloads/win): Claude
+Code runs command hooks through Git Bash there (and clones marketplaces with
+`git`), so the plugin's bash launcher runs unchanged and picks the
+`bin/opik-cipx-windows-<arch>/opik-cipx.exe` binary. PowerShell-only machines
+are not supported. WSL counts as Linux.
 
 ### Local plugin install (contributors)
 
@@ -113,6 +120,23 @@ To pin a specific version:
 curl -fsSL https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.sh | bash -s -- v0.0.35
 ```
 
+### Windows (PowerShell, no plugin)
+
+```powershell
+irm https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.ps1 | iex
+```
+
+Same behaviour as `install.sh`: resolves the latest release for your
+architecture, drops `opik-cipx.exe` into `%USERPROFILE%\.opik-cipx\bin\`, and
+prints the next step. To pin a version, set `CIPX_VERSION` first:
+
+```powershell
+$env:CIPX_VERSION = 'v0.0.90'; irm https://raw.githubusercontent.com/comet-ml/cost-intelligence-proxy/main/install.ps1 | iex
+```
+
+`CIPX_INSTALL_DIR` and `CIPX_REPO` override the destination and the repo, as
+with `install.sh`. From Git Bash, `install.sh` itself also works on Windows.
+
 ### Manual download
 
 Grab the right archive from the
@@ -124,6 +148,8 @@ Grab the right archive from the
 | `opik-cipx-darwin-amd64.tar.gz` | Intel macOS |
 | `opik-cipx-linux-amd64.tar.gz`  | x86_64 Linux |
 | `opik-cipx-linux-arm64.tar.gz`  | arm64 Linux |
+| `opik-cipx-windows-amd64.zip`   | x64 Windows |
+| `opik-cipx-windows-arm64.zip`   | arm64 Windows |
 
 Each archive contains the `opik-cipx` binary. Verify against `SHA256SUMS`
 from the same release before extracting:
@@ -191,8 +217,8 @@ What each piece does:
 The binary itself still needs to land on each machine separately —
 enabling the plugin via managed settings gives every user the hook wiring
 and the `/opik-cipx:opik-cipx` skill, but the actual `opik-cipx`
-binary is dropped by `install.sh` in your provisioning script — see the
-[Provisioning](#provisioning) section.
+binary is dropped by `install.sh` (`install.ps1` on Windows) in your
+provisioning script — see the [Provisioning](#provisioning) section.
 
 **Available `{field}` tokens** for `OPIK_CIPX_PROJECT`:
 
@@ -274,7 +300,8 @@ Notes:
   `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`) restores it.
 - **The binary still ships separately.** Managed settings only carries the
   plugin wiring and env — deploy the `opik-cipx` binary in the same MDM payload
-  with `install.sh` (see [Provisioning](#provisioning)).
+  with `install.sh`, or `install.ps1` on Windows (see
+  [Provisioning](#provisioning)).
 - To lock down which marketplaces users may add at all, pair
   `extraKnownMarketplaces` with
   [`strictKnownMarketplaces`](https://code.claude.com/docs/en/settings#strictknownmarketplaces)
@@ -321,8 +348,8 @@ script. The mechanics are the same everywhere:
      script runners often execute with a minimal `PATH`.
 
 3. **Ship the binary in the same payload** — managed settings only carries the
-   plugin wiring and env; the `opik-cipx` binary lands via `install.sh`
-   (see [Provisioning](#provisioning)).
+   plugin wiring and env; the `opik-cipx` binary lands via `install.sh`, or
+   `install.ps1` on Windows (see [Provisioning](#provisioning)).
 
 4. **Verify** on a device, as the logged-in user, in a *fresh* Claude Code
    session (managed settings load at startup):
@@ -502,8 +529,9 @@ opik-cipx uninstall   # stops the daemon, removes the supervisor unit, deletes ~
 For deploying opik-cipx across a team:
 
 - **Homebrew tap** (planned) — `brew install comet-ml/tap/opik-cipx`.
-- **Provisioning script** — drop `install.sh` into Ansible / Chef / Salt /
-  whatever you already use.
+- **Provisioning script** — drop `install.sh` (or `install.ps1` for Windows
+  endpoints, e.g. an Intune script) into Ansible / Chef / Salt / whatever you
+  already use.
 - **Container images** — none yet; the binary is statically linked so
   copying it in works.
 
