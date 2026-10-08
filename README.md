@@ -71,9 +71,16 @@ From within Claude Code:
 ```
 
 The plugin installs the `SessionStart` hook that keeps the opik-cipx gateway
-alive between Claude Code sessions, plus the `/opik-cipx:opik-cipx` skill
-(how it works + diagnostics). The hook tolerates a missing binary — it just
-prints a hint to install opik-cipx and lets the session continue.
+alive between Claude Code sessions. The hook tolerates a missing binary — it
+just prints a hint to install opik-cipx and lets the session continue.
+
+The skills and slash commands are carried by the binary, not by the plugin, and
+`opik-cipx sync` writes them into `~/.claude` itself. That is deliberate: they
+used to be a second release artifact, and nothing copied them when a new binary
+shipped — so a build could carry a command whose skill had not reached anyone
+yet. One artifact, one version. It also means the skill is a user-level skill,
+so it answers to `opik-cipx` rather than to the namespaced
+`opik-cipx:opik-cipx` a plugin skill would.
 
 The plugin ships the binary in its own tree, so a clean plugin install needs
 nothing more. For a non-plugin setup, drop the binary with `install.sh` (see
@@ -189,10 +196,10 @@ What each piece does:
   window on first launch can't leak unmonitored sessions.
 
 The binary itself still needs to land on each machine separately —
-enabling the plugin via managed settings gives every user the hook wiring
-and the `/opik-cipx:opik-cipx` skill, but the actual `opik-cipx`
-binary is dropped by `install.sh` in your provisioning script — see the
-[Provisioning](#provisioning) section.
+enabling the plugin via managed settings gives every user the hook wiring, but
+the actual `opik-cipx` binary is dropped by `install.sh` in your provisioning
+script — see the [Provisioning](#provisioning) section. The skills and slash
+commands arrive with the binary and are installed by its first `sync`.
 
 **Available `{field}` tokens** for `OPIK_CIPX_PROJECT`:
 
@@ -448,7 +455,7 @@ After `/plugin install opik-cipx@opik-enterprise`:
 
 | Skill | Purpose |
 |---|---|
-| `/opik-cipx:opik-cipx` | How opik-cipx works — architecture, the CLI, state layout, enable/disable, privacy/telemetry, and how to read `opik-cipx status`. Claude pulls it in on its own when you ask about opik-cipx or when spans stop reaching Opik; you can also call it directly. |
+| `opik-cipx` | How opik-cipx works — architecture, the CLI, state layout, enable/disable, privacy/telemetry, and how to read `opik-cipx status`. Claude pulls it in on its own when you ask about opik-cipx or when spans stop reaching Opik; you can also call it directly. |
 
 ## Debugging
 
@@ -492,9 +499,15 @@ opik-cipx purge       # stops the gateway, wipes the WAL spool (drops unshipped 
 opik-cipx uninstall   # stops the daemon, removes the supervisor unit, deletes ~/.opik-cipx
 ```
 
-`opik-cipx uninstall` clears the managed `ANTHROPIC_BASE_URL` and removes
-`~/.opik-cipx`, but the Claude Code plugin owns the `SessionStart` hook wiring
-— to remove that too, uninstall the plugin from Claude Code
+`opik-cipx uninstall` hands `ANTHROPIC_BASE_URL` back — to the upstream you
+had before cipx if there was one, otherwise to an empty value, which is Claude
+Code's default — removes the session hook, status line, skill and slash
+commands the binary wrote into `~/.claude`, and then deletes `~/.opik-cipx`.
+The delete happens only once those repairs are confirmed on disk; if one of
+them failed, `~/.opik-cipx` is left in place and the command exits non-zero
+with what to fix, so a machine is never left pointed at a dead port with no
+binary to repair it. The Claude Code plugin still owns its own `SessionStart`
+hook wiring — to remove that too, uninstall the plugin from Claude Code
 (`/plugin uninstall opik-cipx@opik-enterprise`).
 
 ## Provisioning
