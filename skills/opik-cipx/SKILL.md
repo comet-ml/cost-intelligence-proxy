@@ -131,9 +131,9 @@ reads:
   prompt/completion bytes (redacted mode). Capturing content is the default.
 - `CIPX_HOME` / `CIPX_CONFIG` — override the state root / config-file path.
 - `CIPX_UPSTREAM_PROXY` — forward outbound traffic through another proxy.
-- `OPIK_CIPX_BASE_URL` / `OPIK_CIPX_API_KEY` / `OPIK_CIPX_WORKSPACE` /
-  `OPIK_CIPX_PROJECT` — the Opik destination, namespaced so they don't collide
-  with the Opik SDK's own `OPIK_*` vars. `OPIK_CIPX_DEBUG` toggles debug.
+- `OPIK_CIPX_BASE_URL` / `OPIK_CIPX_API_KEY` / `OPIK_CIPX_WORKSPACE` — the
+  Opik destination, namespaced so they don't collide with the Opik SDK's own
+  `OPIK_*` vars. The project is always `claude-code`. `OPIK_CIPX_DEBUG` toggles debug.
 - `CIPX_SENTRY` (`off` disables) and `CIPX_SENTRY_DSN` — anonymous error
   telemetry, opt-in via the DSN.
 

@@ -186,7 +186,6 @@ Clients pick it up at next startup or within the hourly poll.
     "OPIK_CIPX_BASE_URL": "https://www.comet.com/opik/api",
     "OPIK_CIPX_WORKSPACE": "your-org-cc-workspace",
     "OPIK_CIPX_API_KEY": "<workspace-scoped API key>",
-    "OPIK_CIPX_PROJECT": "cc-{user}",
     "ENABLE_TOOL_SEARCH": "auto"
   },
   "forceRemoteSettingsRefresh": true
@@ -204,8 +203,6 @@ What each piece does:
 - `OPIK_CIPX_API_KEY` — the workspace-scoped key the gateway uses to write
   traces. Treat as sensitive; the key is shared with every machine it's
   deployed to. Provision with the minimum write scope on the CC workspace.
-- `OPIK_CIPX_PROJECT` — supports `{field}` tokens (see below), so one config
-  string routes every user to their own project.
 - `ENABLE_TOOL_SEARCH` — routing Claude Code through opik-cipx sets a
   non-Anthropic `ANTHROPIC_BASE_URL`, which makes CC (≥ 2.1.70) disable MCP
   tool search by default. opik-cipx forwards requests unmodified, so it's safe
@@ -220,17 +217,10 @@ and the `/opik-cipx:opik-cipx` skill, but the actual `opik-cipx`
 binary is dropped by `install.sh` (`install.ps1` on Windows) in your
 provisioning script — see the [Provisioning](#provisioning) section.
 
-**Available `{field}` tokens** for `OPIK_CIPX_PROJECT`:
-
-| Token | Resolves to |
-|---|---|
-| `{user}` | local-part of the user's email (before `@`) — e.g. `collinc` |
-| `{email}` | full email — e.g. `collinc@comet.com` |
-| `{hostname}` | machine hostname |
-
-The gateway also resolves the signed-in user's identity (email, username,
-organization) and attaches it to every trace, so admins can filter by user
-even inside a shared project.
+Every trace lands in the `claude-code` project of that workspace — the one
+the AI Spend dashboard reads. The project is fixed and not configurable. The
+gateway resolves the signed-in user's identity (email, username, organization)
+and attaches it to every trace, so admins can filter by user.
 
 ### Deploy via MDM (managed settings file)
 
@@ -279,7 +269,6 @@ set the Opik destination:
     "OPIK_CIPX_BASE_URL": "https://www.comet.com/opik/api",
     "OPIK_CIPX_WORKSPACE": "your-org-cc-workspace",
     "OPIK_CIPX_API_KEY": "<workspace-scoped API key>",
-    "OPIK_CIPX_PROJECT": "cc-{user}",
     "ENABLE_TOOL_SEARCH": "auto"
   }
 }
@@ -385,7 +374,6 @@ opik-cipx and a regular Opik client can configure them independently.
 | `OPIK_CIPX_BASE_URL` | Opik installation URL (e.g. `https://www.comet.com/opik/api`). |
 | `OPIK_CIPX_API_KEY` | API key the gateway uses to write traces. |
 | `OPIK_CIPX_WORKSPACE` | Opik workspace traces land in. |
-| `OPIK_CIPX_PROJECT` | Project name. Supports `{user}`, `{email}`, `{hostname}` templating — see Enterprise install above. |
 | `OPIK_CIPX_DEBUG` | `true`/`on` → verbose logging to `~/.opik-cipx/logs/cipx.log`. |
 
 #### opik-cipx-specific
@@ -410,7 +398,6 @@ Anything you can set with an `OPIK_CIPX_*` / `CIPX_*` env var can also live in
 base_url  = "https://www.comet.com/opik/api"
 api_key   = "your-api-key"
 workspace = "comet-all"
-project   = "cc-{user}"
 
 [capture]
 capture_content = true
