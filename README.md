@@ -137,6 +137,11 @@ $env:CIPX_VERSION = 'v0.0.90'; irm https://raw.githubusercontent.com/comet-ml/co
 `CIPX_INSTALL_DIR` and `CIPX_REPO` override the destination and the repo, as
 with `install.sh`. From Git Bash, `install.sh` itself also works on Windows.
 
+Once running, the daemon keeps `opik-cipx.exe` up to date itself: it checks
+the latest release hourly and switches over to a newer one. Set
+`[update] enabled = false` in `%USERPROFILE%\.opik-cipx\config.toml` to stay
+on the installed version.
+
 ### Manual download
 
 Grab the right archive from the
