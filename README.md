@@ -469,6 +469,16 @@ After `/plugin install opik-cipx@opik-enterprise`:
 |---|---|
 | `/opik-cipx:opik-cipx` | How opik-cipx works — architecture, the CLI, state layout, enable/disable, privacy/telemetry, and how to read `opik-cipx status`. Claude pulls it in on its own when you ask about opik-cipx or when spans stop reaching Opik; you can also call it directly. |
 
+## Mods (plugin)
+
+The plugin also loads Claude Code mods from `hooks/mods/`. Each one is off until your organization's cipx policy turns it on.
+
+| Mod | What it does |
+|---|---|
+| `evening-compact` | Inside the time window your organization sets, compacts an idle session ten minutes before its 1h prompt cache expires, so the next resume starts from a shorter conversation. Sessions on a 5m cache or under 30k context tokens are left alone. |
+
+Details, known gaps and how to add a mod: [`hooks/mods/README.md`](hooks/mods/README.md).
+
 ## Debugging
 
 ```bash
