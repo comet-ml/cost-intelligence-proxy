@@ -4,7 +4,7 @@ Claude Code mods shipped with the opik-cipx plugin. Each mod is a file in this d
 
 ## evening-compact
 
-Compacts an idle main-thread session ten minutes before its 1h prompt cache expires (at 50m idle), the same way `/compact` does, but only inside the window the org sets in the cipx policy. Sessions under 30k context tokens are left alone. After a compaction, the transcript gets a line saying "Comet compacted this session at HH:MM while it was idle." and the status line shows the same until the next turn.
+Compacts an idle main-thread session ten minutes before its 1h prompt cache expires (at 50m idle), the same way `/compact` does, but only inside the window the org sets in the cipx policy. Sessions under 30k context tokens are left alone. After a compaction, the transcript gets a line saying "Comet compacted this session at HH:MM while it was idle."
 
 **The policy is the switch.** The mod reads `$CIPX_HOME/policy-state.json` (default `~/.opik-cipx/policy-state.json`, written by the cipx daemon) when its timer fires, so a policy change applies without a restart. The setting is `settings.cipx.adaptive_settings.claude_code.session_compact`, holding `window_start` and `window_end` as local `H:MM` strings:
 

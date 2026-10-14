@@ -187,7 +187,7 @@ describe('evening-compact', () => {
   })
 
   const faultCases = [
-    { name: 'logs a skipped compaction and sets no status', faults: { compactSkip: 'hook blocked it' }, logged: 'evening-compact: skipped (hook blocked it)' },
+    { name: 'logs a skipped compaction',faults: { compactSkip: 'hook blocked it' }, logged: 'evening-compact: skipped (hook blocked it)' },
     { name: 'logs, instead of throwing, when the usage read fails', faults: { usageFails: 'fire' as const }, logged: 'evening-compact: not compacted' },
   ]
 
@@ -198,7 +198,6 @@ describe('evening-compact', () => {
       await clock.advance(HOUR)
 
       expect(notices.filter((n) => n.startsWith(c.logged)).length, `"${c.logged}" log lines in ${JSON.stringify(notices)}`).toBe(1)
-      expect(notices.filter((n) => n.startsWith('status:')), 'status lines').toEqual([])
     })
   }
 
@@ -209,17 +208,11 @@ describe('evening-compact', () => {
     expect(compactions.length, 'compactions').toBe(1)
   })
 
-  test('tells the person Comet compacted the session, and clears the status on their next turn', async ($, on) => {
+  test('tells the person Comet compacted the session in the transcript only', async ($, on) => {
     const { clock, notices } = harness(on, at(18))
     await finishTurn($, 't1')
     await clock.advance(HOUR)
-    expect(notices).toEqual([
-      'Comet compacted this session at 18:50 while it was idle.',
-      'status: Compacted by Comet at 18:50',
-    ])
-
-    await $.turn.start({ text: 'back', turnId: 't2' })
-    expect(notices.at(-1)).toBe('status: (cleared)')
+    expect(notices).toEqual(['Comet compacted this session at 18:50 while it was idle.'])
   })
 
   test('a new turn before expiry cancels the pending compaction and rearms on its end', async ($, on) => {

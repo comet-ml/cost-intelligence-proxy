@@ -85,10 +85,9 @@ export const registerEveningCompact: Register = (on) => {
 
   let turns = 0
 
-  on('turn.start', ($, e, next) => {
+  on('turn.start', (_$, e, next) => {
     turns++
     cancel()
-    $.ui.status(undefined)
     return next(e)
   })
 
@@ -138,7 +137,6 @@ export const registerEveningCompact: Register = (on) => {
         }
         // The person is away by construction, so a toast alone would go unseen.
         $.ui.log(`Comet compacted this session at ${clockTime(now)} while it was idle.`)
-        $.ui.status(`Compacted by Comet at ${clockTime(now)}`)
       } catch (err) {
         // compact rejects when a turn started in the meantime; that turn rearms us.
         $.ui.log(`evening-compact: not compacted (${String(err)})`)
