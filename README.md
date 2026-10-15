@@ -475,7 +475,7 @@ The plugin also loads Claude Code mods from `hooks/mods/`. Each one is off until
 
 | Mod | What it does |
 |---|---|
-| `evening-compact` | Inside the time window your organization sets, compacts an idle session ten minutes before its 1h prompt cache expires, so the next resume starts from a shorter conversation. Sessions on a 5m cache or under 30k context tokens are left alone. |
+| `evening-compact` | Inside the time window your organization sets, compacts an idle session ten minutes before its 1h prompt cache expires, so the next resume starts from a shorter conversation. Sessions on a 5m or not-yet-observed cache, or under 30k context tokens, are left alone. Decisions are logged to `~/.opik-cipx/logs/mods.log` (`opik-cipx logs mods`). |
 
 Details, known gaps and how to add a mod: [`hooks/mods/README.md`](hooks/mods/README.md).
 
