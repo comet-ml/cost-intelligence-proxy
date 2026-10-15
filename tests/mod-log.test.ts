@@ -11,7 +11,7 @@ const memory = (initial?: string, options: { slow?: boolean; failWrite?: boolean
   const io: ModLogIo = {
     home: async () => '/home/u/.opik-cipx',
     exists: async (path) => path in files,
-    readFile: async (path) => files[path],
+    readFile: async (path) => files[path] ?? '',
     writeFile: async (path, text) => {
       if (options.failWrite) throw new Error('EACCES')
       files[path] = text
@@ -46,15 +46,15 @@ describe('modLog', () => {
   test('keeps one event on one line by stripping CR and LF from the text', async () => {
     const { io, files } = memory()
     await modLog(io, 'm', 's1', 'failed (a\r\nb\nc\rd)')
-    const lines = files[LOG].split('\n')
+    const lines = (files[LOG] ?? '').split('\n')
     expect(lines.length, `lines in ${JSON.stringify(files[LOG])}`).toBe(2)
-    expect(lines[0]).toContain('failed (a b c d)')
+    expect(lines[0] ?? '').toContain('failed (a b c d)')
   })
 
   test('does not lose lines when many writes start at once', async () => {
     const { io, files } = memory('', { slow: true })
     await Promise.all(Array.from({ length: 20 }, (_, i) => modLog(io, 'm', 's1', `event ${i}`)))
-    const texts = files[LOG].split('\n').filter(Boolean).map((l) => l.split(': ').pop())
+    const texts = (files[LOG] ?? '').split('\n').filter(Boolean).map((l) => l.split(': ').pop())
     expect(texts, 'every concurrent event, in call order').toEqual(Array.from({ length: 20 }, (_, i) => `event ${i}`))
   })
 
@@ -63,7 +63,7 @@ describe('modLog', () => {
     expect(old.length, 'fixture size').toBeGreaterThan(1024 * 1024)
     const { io, files } = memory(old)
     await modLog(io, 'm', 's1', 'newest')
-    const out = files[LOG]
+    const out = files[LOG] ?? ''
     const lines = out.split('\n').slice(0, -1)
     expect(out.length, 'trimmed size').toBeLessThanOrEqual(1024 * 1024 / 2 + 200)
     expect(lines.every((l) => l.startsWith('2026-')), 'every kept line is whole, not cut mid-line').toBe(true)

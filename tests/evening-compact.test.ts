@@ -40,8 +40,9 @@ const harness = (on: On, now: number, options: Options = {}) => {
   if (!options.idFails) on('session.id', () => ({ value: SESSION }))
   on('fs.exists', (_$, e) => ({ value: e.path in files }))
   on('fs.read', (_$, e) => {
-    if (!(e.path in files)) throw new Error(`ENOENT ${e.path}`)
-    return { value: files[e.path] }
+    const text = files[e.path]
+    if (text === undefined) throw new Error(`ENOENT ${e.path}`)
+    return { value: text }
   })
   on('fs.write', (_$, e) => {
     if (failLogWrite && e.path === MODS_LOG) throw new Error('EACCES')
@@ -57,10 +58,12 @@ const harness = (on: On, now: number, options: Options = {}) => {
   })
   const compactions: number[] = []
   on('session.usage', () => ({ value: { startedAt: 0, context: { tokens: contextTokens ?? undefined, window: 200_000 }, rateLimits: [] } }))
-  if (options.compact !== 'throws') on('session.compact', async () => {
+  on('session.compact', async () => {
+    const outcome = options.compact
+    if (outcome === 'throws') throw new Error('compact failed')
     compactions.push(clock.now() - now)
     if (delays.compact) await clock.sleep(delays.compact)
-    if (options.compact) return options.compact
+    if (outcome) return outcome
     return { messages: [{ role: 'user', text: 'summary', toolUses: [] }] }
   })
   const transcript: string[] = []
@@ -168,7 +171,8 @@ describe('evening-compact', () => {
       expect(compactions.length, 'compactions without a daemon answer').toBe(0)
       const lines = modsLog()
       expect(lines.length, `mods.log lines: ${JSON.stringify(lines)}`).toBe(1)
-      expect(lines[0].startsWith(line('not checked (cipx daemon: ')) && lines[0].includes(c.logged), `"not checked" line naming ${c.logged}: ${lines[0]}`).toBe(true)
+      const first = lines[0] ?? ''
+      expect(first.startsWith(line('not checked (cipx daemon: ')) && first.includes(c.logged), `"not checked" line naming ${c.logged}: ${first}`).toBe(true)
       expect(transcript, 'transcript lines').toEqual([])
     })
   }
@@ -274,7 +278,7 @@ describe('evening-compact', () => {
     await clock.advance(HOUR)
     const lines = modsLog()
     expect(compactions.length, 'compactions').toBe(0)
-    expect(lines.length === 1 && lines[0].startsWith('evening-compact session=unknown: failed ('), `mods.log lines: ${JSON.stringify(lines)}`).toBe(true)
+    expect(lines.length === 1 && (lines[0] ?? '').startsWith('evening-compact session=unknown: failed ('), `mods.log lines: ${JSON.stringify(lines)}`).toBe(true)
   })
 
   test('reads the daemon port from CIPX_HOME when it is set', async ($, on) => {
@@ -296,6 +300,6 @@ describe('evening-compact', () => {
     expect(compactions.length, 'compactions').toBe(1)
     expect(transcript, 'transcript lines').toEqual(['Comet compacted this session at 18:50 while it was idle.'])
     expect(debug.length, `debug lines: ${JSON.stringify(debug)}`).toBe(1)
-    expect(debug[0].endsWith(line('compacted')), `debug line carries the full log line: ${debug[0]}`).toBe(true)
+    expect((debug[0] ?? '').endsWith(line('compacted')), `debug line carries the full log line: ${debug[0]}`).toBe(true)
   })
 })
