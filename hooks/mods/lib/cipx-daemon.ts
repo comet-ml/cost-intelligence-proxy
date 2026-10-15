@@ -1,8 +1,7 @@
-export type CacheTtl = '5m' | '1h' | 'unknown'
-
 export type SessionCompactAnswer =
   | { enabled: false }
-  | { enabled: true; windowStart: string; windowEnd: string; cacheTtl: CacheTtl }
+  // cacheTtl is the daemon's raw string ("1h", "5m", "unknown", or whatever a newer daemon says), for the log line.
+  | { enabled: true; windowStart: string; windowEnd: string; startMinutes: number; endMinutes: number; cacheTtl: string }
 
 // The caller makes the $.env.get, $.fs.read and $.http.fetch calls: validate follows `$` only within one file.
 export type DaemonIo = {
@@ -50,7 +49,7 @@ export const adminPort = async (io: DaemonIo): Promise<number> => {
 }
 
 // The daemon normalises window bounds, so anything but zero-padded HH:MM is a contract break.
-export const minutesOfDay = (hhmm: string): number | undefined => {
+const minutesOfDay = (hhmm: string): number | undefined => {
   const m = /^(\d{2}):(\d{2})$/.exec(hhmm)
   if (!m) return undefined
   const hours = Number(m[1])
@@ -62,12 +61,14 @@ const parseAnswer = (body: unknown): SessionCompactAnswer => {
   if (!isObject(body) || typeof body.enabled !== 'boolean') throw new Error('malformed response: no boolean "enabled"')
   if (!body.enabled) return { enabled: false }
   const { window_start: start, window_end: end } = body
-  if (typeof start !== 'string' || typeof end !== 'string' || minutesOfDay(start) === undefined || minutesOfDay(end) === undefined) {
+  const startMinutes = typeof start === 'string' ? minutesOfDay(start) : undefined
+  const endMinutes = typeof end === 'string' ? minutesOfDay(end) : undefined
+  if (typeof start !== 'string' || typeof end !== 'string' || startMinutes === undefined || endMinutes === undefined) {
     throw new Error('malformed response: window_start/window_end are not HH:MM')
   }
-  if (start === end) throw new Error('malformed response: window_start equals window_end')
-  const cacheTtl = body.cache_ttl === '1h' || body.cache_ttl === '5m' ? body.cache_ttl : 'unknown'
-  return { enabled: true, windowStart: start, windowEnd: end, cacheTtl }
+  if (startMinutes === endMinutes) throw new Error('malformed response: window_start equals window_end')
+  const cacheTtl = typeof body.cache_ttl === 'string' && body.cache_ttl !== '' ? body.cache_ttl : 'unknown'
+  return { enabled: true, windowStart: start, windowEnd: end, startMinutes, endMinutes, cacheTtl }
 }
 
 export const sessionCompact = async (io: DaemonIo, sessionId: string): Promise<SessionCompactAnswer> => {

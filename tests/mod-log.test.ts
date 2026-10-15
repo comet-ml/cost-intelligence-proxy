@@ -88,6 +88,15 @@ describe('modLog', () => {
     expect(fallback.length, 'fallback lines').toBe(1)
   })
 
+  test('falls back, without a timestamp, when the clock cannot be read', async () => {
+    const { io, files, fallback } = memory()
+    io.now = async () => {
+      throw new Error('clock down')
+    }
+    await modLog(io, 'm', 's1', 'compacted')
+    expect({ file: files[LOG], fallback }, 'log file and fallback lines').toEqual({ file: undefined, fallback: ['m session=s1: compacted'] })
+  })
+
   test('keeps logging after a failed write', async () => {
     const { io, files } = memory(undefined, { failWrite: true })
     await modLog(io, 'm', 's1', 'first')

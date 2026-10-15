@@ -6,28 +6,29 @@ Claude Code mods shipped with the opik-cipx plugin. Each mod is a file in this d
 
 Compacts an idle main-thread session ten minutes before its 1h prompt cache expires (at 50m idle), the same way `/compact` does, but only inside the window the org sets in the cipx policy. Sessions under 30k context tokens are left alone. After a compaction, the transcript gets a line saying "Comet compacted this session at HH:MM while it was idle." That is the only line the mod writes to the transcript.
 
-**The daemon provides the facts, the mod decides.** Every main-thread turn arms a 50m timer (a new turn cancels it). When it fires, the mod asks the cipx daemon `GET /mods/session_compact?session_id=<id>` on its admin port (from `<cipx home>/state.json`, else `ports.json`; the home is `$CIPX_HOME`, default `~/.opik-cipx`). The daemon answers whether the org policy turns the mod on, the window (`window_start`, `window_end`, local `HH:MM`), and the prompt-cache TTL it observed for that session (`1h`, `5m` or `unknown`). The daemon logs an invalid window itself and answers disabled. The mod compacts only when all of these hold:
+**The daemon provides the facts, the mod decides.** Every main-thread turn arms a 50m timer; a new main-thread turn cancels it, a subagent turn does not. When it fires, the mod asks the cipx daemon `GET /mods/session_compact?session_id=<id>` on its admin port (from `<cipx home>/state.json`, else `ports.json`; the home is `$CIPX_HOME`, default `~/.opik-cipx`). The daemon answers whether the org policy turns the mod on, the window (`window_start`, `window_end`, local `HH:MM`), and the prompt-cache TTL it observed for that session (`1h`, `5m` or `unknown`). The daemon logs an invalid window itself and answers disabled. The call times out after 5s (logged as `not checked`). The mod compacts only when all of these hold:
 
 - The policy is on (otherwise it does nothing and logs nothing).
 - The fire time is inside the window. The start is inclusive, the end exclusive, and the window may wrap past midnight.
 - The cache TTL is `1h`. The 50m timing is built for the 1h tier, so `5m` and `unknown` sessions are skipped.
-- The context is at least 30k tokens.
+- The context is at least 30k tokens (`skipped (context unknown)` if the engine cannot report it).
+- No main-thread turn began since the timer was armed (`skipped (session resumed)`).
 
 The cache TTL is only known after the session's requests went through the cipx proxy.
 
-**Logs.** Each decision is one line in `~/.opik-cipx/logs/mods.log` (`opik-cipx logs mods`): `<UTC timestamp> evening-compact session=<id>: <text>`, where the text is `compacted`, `skipped (<reason>)`, `failed (<error>)` or `not checked (cipx daemon: <error>)`. The file keeps its newest 512 KiB once it passes 1 MiB. If the file cannot be written, the line goes to the Claude Code debug log.
+**Logs.** Each decision is one line in `<cipx home>/logs/mods.log` (default `~/.opik-cipx/logs/mods.log`; `opik-cipx logs mods` reads it, and needs a daemon with the endpoint): `<UTC timestamp> evening-compact session=<id>: <text>`, where the text is `compacted`, `skipped (<reason>)`, `failed (<error>)` or `not checked (cipx daemon: <error>)`. The file keeps its newest 512 KiB once it passes 1 MiB. If the file cannot be written, the line goes to the Claude Code debug log.
 
 **Compaction wins over cache warming.** cipx's `cache_warm` replays an idle session's last turn to keep its cache alive; its first keepalive on a 1h cache goes out at 55m12s. The mod fires at 50m, ahead of that keepalive, while the cache is still alive, and cipx stops warming the session once it sees the compaction.
 
 ### Known gaps
 
-- It does not check that a policy backend is configured, so a stale policy still applies.
-- It has no minimum idle time and no cap on compactions per window.
+- It has no cap on compactions per window.
 - The 50m lead sits ahead of cipx's first 1h keepalive (55m12s), so it must follow any change to that cadence.
 - The pending timer lives only in memory: a plugin update or reload while a session is idle cancels that session's compaction.
 - A daemon older than the `/mods/session_compact` endpoint answers 404, so there is no evening compact; the mod logs `not checked`.
-- A daemon restart forgets the observed cache TTLs until each session's next turn, so a compaction that fires in between is skipped as `unknown`.
-- `mods.log` is appended by read and rewrite, so two sessions logging at the same instant can drop a line.
+- The daemon forgets observed cache TTLs on restart and when the `session_compact` policy changes, until each session's next turn, so a compaction that fires in between is skipped as `unknown`.
+- A session whose requests never pass the daemon's main-chain check (e.g. the Agent tool disallowed) stays `unknown` and is never compacted.
+- `mods.log` is appended by read and rewrite, so two sessions logging at the same moment can lose lines (write atomicity is not known).
 - The macOS app's capture path does not serve the endpoint, so sessions captured by the app are `not checked`.
 - The `modules` key in `hooks/hooks.json` is verified only on Claude Code 2.1.288 and later. If an older Claude Code rejects it, the plugin's `sync` hooks go down with it.
 

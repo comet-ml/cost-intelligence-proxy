@@ -23,8 +23,9 @@ const trim = (content: string) => {
 
 const append = async (io: ModLogIo, mod: string, sessionId: string, text: string) => {
   const flat = text.replace(/[\r\n]+/g, ' ').slice(0, MAX_TEXT)
-  const line = `${new Date(await io.now()).toISOString()} ${mod} session=${sessionId}: ${flat}`
+  let line = `${mod} session=${sessionId}: ${flat}`
   try {
+    line = `${new Date(await io.now()).toISOString()} ${line}`
     const home = await io.home()
     if (home === undefined) throw new Error('no cipx home')
     const path = `${home}/logs/mods.log`

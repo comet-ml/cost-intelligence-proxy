@@ -63,7 +63,7 @@ describe('sessionCompact', () => {
 
   test('parses an enabled answer', async () => {
     const text = '{"enabled":true,"window_start":"17:00","window_end":"23:00","cache_ttl":"1h"}'
-    expect(await ask({ status: 200, text })).toEqual({ enabled: true, windowStart: '17:00', windowEnd: '23:00', cacheTtl: '1h' })
+    expect(await ask({ status: 200, text })).toEqual({ enabled: true, windowStart: '17:00', windowEnd: '23:00', startMinutes: 1020, endMinutes: 1380, cacheTtl: '1h' })
   })
 
   test('parses a disabled answer, with or without a reason', async () => {
@@ -72,7 +72,8 @@ describe('sessionCompact', () => {
   })
 
   const ttlCases = [
-    { name: 'an unrecognised cache_ttl', cacheTtl: '"2h"', want: 'unknown' },
+    { name: 'an unrecognised cache_ttl, verbatim for the log', cacheTtl: '"2h"', want: '2h' },
+    { name: 'an empty cache_ttl', cacheTtl: '""', want: 'unknown' },
     { name: 'a missing cache_ttl', cacheTtl: undefined, want: 'unknown' },
     { name: 'a non-string cache_ttl', cacheTtl: '3600', want: 'unknown' },
     { name: '5m', cacheTtl: '"5m"', want: '5m' },
